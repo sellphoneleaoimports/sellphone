@@ -30,103 +30,102 @@
     <!-- Supabase JS Client (v2) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Custom CSS Dribbble-inspired -->
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body class="bg-[#f6f7fa] text-[#121316] min-h-screen flex antialiased">
 
     <!-- ==============================================================================
-         1. SIDEBAR MINIMALISTA ESCURA (REFERÊNCIA IMAGEM 1)
+         1. SIDEBAR MINIMALISTA ESCURA (COMPACTA E SEM CORTAR NOMES)
          ============================================================================== -->
-    <aside id="sidebar-container" class="w-64 bg-[#121418] text-white flex flex-col justify-between shrink-0 h-screen sticky top-0 p-5 z-30 select-none hidden lg:flex">
+    <aside id="sidebar-container" class="w-[202px] bg-[#121418] text-white flex flex-col justify-between shrink-0 h-screen sticky top-0 px-2 py-3.5 z-30 select-none hidden lg:flex">
         
-        <div class="space-y-6">
+        <div class="space-y-3.5">
             <!-- Brand / Logo Header com leao.jpg -->
-            <div class="flex items-center gap-3 px-2 py-1 cursor-pointer" onclick="switchTab('dashboard')">
-                <div class="relative">
-                    <img src="leao.jpg" alt="iLion" class="w-10 h-10 rounded-2xl object-cover ring-2 ring-yellow-400/30">
-                    <span class="w-2.5 h-2.5 rounded-full bg-yellow-400 absolute -bottom-0.5 -right-0.5 border-2 border-[#121418]"></span>
+            <div class="flex items-center gap-2 px-1.5 py-1 cursor-pointer" onclick="switchTab('dashboard')">
+                <div class="relative shrink-0">
+                    <img src="leao.jpg" alt="iLion" class="w-8 h-8 rounded-xl object-cover ring-2 ring-yellow-400/30">
+                    <span class="w-2 h-2 rounded-full bg-yellow-400 absolute -bottom-0.5 -right-0.5 border-2 border-[#121418]"></span>
                 </div>
-                <div>
-                    <div class="flex items-center gap-2">
-                        <span class="font-extrabold tracking-tight text-white text-lg">iLion</span>
-                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-400/20 text-yellow-300">Apple</span>
+                <div class="min-w-0">
+                    <div class="flex items-center gap-1.5">
+                        <span class="font-extrabold tracking-tight text-white text-base leading-none">iLion</span>
+                        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-400/20 text-yellow-300">Apple</span>
                     </div>
-                    <p class="text-[11px] text-slate-400 font-medium">Especialista Store</p>
+                    <p class="text-[10px] text-slate-400 font-medium mt-0.5">Especialista Store</p>
                 </div>
             </div>
 
             <!-- Seção de Menu Principal -->
-            <div class="space-y-1">
-                <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-3 py-1.5">Menu</div>
+            <div class="space-y-0.5">
+                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-500 px-2 py-1">Menu</div>
 
                 <a href="javascript:void(0)" onclick="switchTab('dashboard')" id="nav-dashboard" class="sidebar-link active">
-                    <i class="fa-solid fa-table-cells-large text-sm w-4 text-center"></i>
+                    <i class="fa-solid fa-table-cells-large text-xs w-4 text-center shrink-0"></i>
                     <span>Dashboard</span>
                 </a>
 
                 <a href="javascript:void(0)" onclick="switchTab('estoque')" id="nav-estoque" class="sidebar-link">
-                    <i class="fa-solid fa-mobile-screen text-sm w-4 text-center"></i>
+                    <i class="fa-solid fa-mobile-screen text-xs w-4 text-center shrink-0"></i>
                     <span>Estoque Serial</span>
-                    <span id="badge-total-estoque" class="ml-auto text-[11px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 font-mono">0</span>
+                    <span id="badge-total-estoque" class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-slate-300 font-mono shrink-0">0</span>
                 </a>
 
                 <a href="javascript:void(0)" onclick="switchTab('tradein')" id="nav-tradein" class="sidebar-link">
-                    <i class="fa-solid fa-repeat text-sm w-4 text-center"></i>
+                    <i class="fa-solid fa-repeat text-xs w-4 text-center shrink-0"></i>
                     <span>PDV & Trade-In</span>
-                    <span class="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-400 text-slate-950 font-bold">TROCA</span>
+                    <span class="ml-auto text-[8px] px-1.5 py-0.5 rounded-full bg-yellow-400 text-slate-950 font-bold shrink-0">TROCA</span>
                 </a>
 
                 <a href="javascript:void(0)" onclick="switchTab('crm')" id="nav-crm" class="sidebar-link">
-                    <i class="fa-solid fa-user-group text-sm w-4 text-center"></i>
+                    <i class="fa-solid fa-user-group text-xs w-4 text-center shrink-0"></i>
                     <span>CRM & Clientes</span>
                 </a>
 
                 <a href="javascript:void(0)" onclick="switchTab('encomendas')" id="nav-encomendas" class="sidebar-link">
-                    <i class="fa-solid fa-crosshairs text-sm w-4 text-center"></i>
+                    <i class="fa-solid fa-crosshairs text-xs w-4 text-center shrink-0"></i>
                     <span>Lista de Espera</span>
-                    <span id="badge-matches" class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold hidden">MATCH</span>
+                    <span id="badge-matches" class="ml-auto text-[8px] px-1 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold hidden shrink-0">MATCH</span>
                 </a>
 
                 <a href="javascript:void(0)" onclick="switchTab('posvenda')" id="nav-posvenda" class="sidebar-link">
-                    <i class="fa-solid fa-shield-halved text-sm w-4 text-center"></i>
+                    <i class="fa-solid fa-shield-halved text-xs w-4 text-center shrink-0"></i>
                     <span>Pós-Venda & Ciclo</span>
                 </a>
 
                 <a href="javascript:void(0)" onclick="switchTab('documentos')" id="nav-documentos" class="sidebar-link">
-                    <i class="fa-solid fa-receipt text-sm w-4 text-center"></i>
+                    <i class="fa-solid fa-receipt text-xs w-4 text-center shrink-0"></i>
                     <span>Recibos & Termos</span>
                 </a>
 
                 <a href="javascript:void(0)" onclick="switchTab('modelos')" id="nav-modelos" class="sidebar-link">
-                    <i class="fa-solid fa-boxes-stacked text-sm w-4 text-center"></i>
-                    <span>Catálogo de Produtos</span>
-                    <span id="badge-total-modelos" class="ml-auto text-[11px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 font-mono">0</span>
+                    <i class="fa-solid fa-boxes-stacked text-xs w-4 text-center shrink-0"></i>
+                    <span>Catálogo</span>
+                    <span id="badge-total-modelos" class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-slate-300 font-mono shrink-0">0</span>
                 </a>
 
                 <a href="javascript:void(0)" onclick="switchTab('consolidado')" id="nav-consolidado" class="sidebar-link">
-                    <i class="fa-solid fa-chart-pie text-sm w-4 text-center"></i>
+                    <i class="fa-solid fa-chart-pie text-xs w-4 text-center shrink-0"></i>
                     <span>Consolidado</span>
-                    <span class="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">PDF</span>
+                    <span class="ml-auto text-[8px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold shrink-0">PDF</span>
                 </a>
 
                 <a href="javascript:void(0)" onclick="switchTab('rotas')" id="nav-rotas" class="sidebar-link">
-                    <i class="fa-solid fa-route text-sm w-4 text-center"></i>
+                    <i class="fa-solid fa-route text-xs w-4 text-center shrink-0"></i>
                     <span>Rotas & Entregas</span>
-                    <span class="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-bold">ROTA</span>
                 </a>
             </div>
 
         </div>
 
-        <!-- Card de Perfil no Rodapé da Sidebar (Igual ao da imagem 1) -->
-        <div class="pt-4 border-t border-slate-800/80">
-            <div class="flex items-center gap-3 p-2 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors cursor-pointer" onclick="switchTab('dashboard')">
-                <img src="leao.jpg" class="w-9 h-9 rounded-xl object-cover">
+        <!-- Card de Perfil no Rodapé da Sidebar -->
+        <div class="pt-3 border-t border-slate-800/80">
+            <div class="flex items-center gap-2.5 p-2 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors cursor-pointer" onclick="switchTab('dashboard')">
+                <img src="leao.jpg" class="w-8 h-8 rounded-xl object-cover shrink-0">
                 <div class="overflow-hidden flex-1">
-                    <h5 class="text-xs font-bold text-white truncate">Loja Apple</h5>
-                    <p class="text-[11px] text-slate-400 truncate">Vendas & Estoque</p>
+                    <h5 class="text-[11px] font-bold text-white truncate">Loja Apple</h5>
+                    <p class="text-[10px] text-slate-400 truncate">Vendas & Estoque</p>
                 </div>
-                <i class="fa-solid fa-chevron-right text-xs text-slate-500"></i>
+                <i class="fa-solid fa-chevron-right text-[10px] text-slate-500"></i>
             </div>
         </div>
     </aside>
@@ -137,7 +136,7 @@
     <div class="flex-1 flex flex-col min-w-0 overflow-y-auto">
         
         <!-- Top Header Minimalista -->
-        <header id="top-app-header" class="h-20 px-6 lg:px-10 flex items-center justify-between border-b border-slate-200/80 bg-white/70 backdrop-blur-md sticky top-0 z-20">
+        <header id="top-app-header" class="h-16 px-5 lg:px-8 flex items-center justify-between border-b border-slate-200/80 bg-white/70 backdrop-blur-md sticky top-0 z-20">
             <!-- Título da Página Atual -->
             <div class="flex items-center gap-3">
                 <button onclick="toggleMobileMenu()" class="lg:hidden p-2 rounded-xl bg-slate-100 text-slate-700">
@@ -150,7 +149,7 @@
             </div>
 
             <!-- Barra de Busca Global em Pílula + Ações Rápidas -->
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2.5">
                 <!-- Search Pill -->
                 <div class="relative hidden sm:block">
                     <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
@@ -170,18 +169,12 @@
                     <i class="fa-solid fa-plus text-slate-500"></i>
                     <span class="hidden sm:inline">Novo Aparelho</span>
                 </button>
-
-                <!-- Botão de Apresentação Executiva em PDF -->
-                <a href="apresentacao.html" target="_blank" title="Guia Executivo dos Recursos em PDF" class="btn-pill-secondary">
-                    <i class="fa-solid fa-file-pdf text-rose-500"></i>
-                    <span class="hidden md:inline">Apresentação</span>
-                </a>
             </div>
         </header>
 
         <!-- Menu Mobile -->
         <div id="mobile-menu" class="fixed inset-0 bg-black/70 z-50 hidden lg:hidden">
-            <div class="w-64 bg-[#121418] h-full p-5 flex flex-col justify-between text-white">
+            <div class="w-60 bg-[#121418] h-full p-4 flex flex-col justify-between text-white">
                 <div class="space-y-4">
                     <div class="flex items-center justify-between pb-3 border-b border-slate-800">
                         <div class="flex items-center gap-2">
@@ -209,17 +202,13 @@
                             <span>Rotas & Entregas</span>
                             <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-bold">ROTA</span>
                         </button>
-                        <a href="apresentacao.html" target="_blank" class="w-full text-left py-2 px-3 rounded-xl hover:bg-white/10 flex items-center justify-between text-yellow-400 font-bold">
-                            <span>Apresentação Comercial</span>
-                            <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-400/20 text-yellow-400 font-bold">PDF</span>
-                        </a>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- ÁREA CENTRAL DE CONTEÚDO ROLÁVEL -->
-        <main class="p-6 lg:p-10 space-y-8 flex-1">
+        <main class="p-5 lg:p-7 space-y-6 flex-1">
 
             <!-- ==============================================================================
                  VIEW 1: DASHBOARD GERAL (ESTRUTURA IDENTICA À IMAGEM 1 DE REFERÊNCIA)
