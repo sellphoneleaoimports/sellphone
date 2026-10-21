@@ -20,27 +20,58 @@ import uuid
 
 PORT = 8000
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_FILE = os.path.join(BASE_DIR, "dados_sistema.sqlite3")
+IS_VERCEL = bool(os.environ.get('VERCEL') or os.environ.get('VERCEL_ENV') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'))
+DB_FILE = "/tmp/dados_sistema.sqlite3" if IS_VERCEL else os.path.join(BASE_DIR, "dados_sistema.sqlite3")
+UPLOADS_DIR = "/tmp/uploads" if IS_VERCEL else os.path.join(BASE_DIR, "uploads")
 
 # ==============================================================================
 # SINCRONIZAÇÃO BIDIRECIONAL / EM SEGUNDO PLANO COM SUPABASE
 # ==============================================================================
 def get_supabase_headers():
+    # 1. Prioriza Variáveis de Ambiente do Sistema (Vercel / Cloud / Docker)
+    url = (os.environ.get('SUPABASE_URL') or os.environ.get('NEXT_PUBLIC_SUPABASE_URL') or '').strip()
+    key = (
+        os.environ.get('SUPABASE_SECRET_KEY')
+        or os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
+        or os.environ.get('SUPABASE_ANON_KEY')
+        or os.environ.get('SUPABASE_PUBLISHABLE_KEY')
+        or os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY')
+        or ''
+    ).strip()
+    if url and key:
+        return url, key
+
+    # 2. Fallback para arquivo .env local
     env_file = os.path.join(BASE_DIR, ".env")
-    if not os.path.exists(env_file):
-        return None, None
-    keys = {}
+    if os.path.exists(env_file):
+        keys = {}
+        try:
+            with open(env_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if '=' in line and not line.strip().startswith('#'):
+                        k, v = line.strip().split('=', 1)
+                        keys[k.strip()] = v.strip().strip('"').strip("'")
+        except Exception:
+            pass
+        url = url or keys.get('SUPABASE_URL')
+        key = key or keys.get('SUPABASE_SECRET_KEY') or keys.get('SUPABASE_SERVICE_ROLE_KEY') or keys.get('SUPABASE_ANON_KEY') or keys.get('SUPABASE_PUBLISHABLE_KEY')
+        if url and key:
+            return url, key
+
+    # 3. Fallback para tabela config_sistema no SQLite
     try:
-        with open(env_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                if '=' in line and not line.strip().startswith('#'):
-                    k, v = line.strip().split('=', 1)
-                    keys[k.strip()] = v.strip().strip('"').strip("'")
+        if os.path.exists(DB_FILE):
+            conn = sqlite3.connect(DB_FILE, timeout=5)
+            c = conn.cursor()
+            c.execute("SELECT chave, valor FROM config_sistema WHERE chave IN ('supabase_url', 'supabase_key')")
+            rows = dict(c.fetchall())
+            conn.close()
+            url = url or rows.get('supabase_url')
+            key = key or rows.get('supabase_key')
     except Exception:
         pass
-    url = keys.get('SUPABASE_URL')
-    key = keys.get('SUPABASE_SECRET_KEY') or keys.get('SUPABASE_ANON_KEY') or keys.get('SUPABASE_PUBLISHABLE_KEY')
-    return url, key
+
+    return (url or None), (key or None)
 
 def sync_upsert_supabase(table, data_dict):
     url, key = get_supabase_headers()
@@ -206,36 +237,54 @@ def sync_pull_from_supabase(target_table=None):
     url, key = get_supabase_headers()
     if not url or not key:
         return
-    import urllib.request, ssl, json
-    ctx = ssl.create_default_context()
-    
+    import urllib.request, ssl, json, concurrent.futures
+
     if target_table == 'pedidos_venda':
         tables_to_sync = ['pedidos_venda', 'itens_venda']
     elif target_table:
         tables_to_sync = [target_table]
     else:
-        tables_to_sync = ['pedidos_venda', 'itens_venda', 'trocas_trade_in', 'clientes', 'dispositivos', 'interacoes_crm', 'encomendas_desejos', 'rotas_entrega']
-    
-    # 1. Busca dados da nuvem via HTTP sem abrir transações no SQLite
+        tables_to_sync = [
+            'clientes', 'dispositivos', 'pedidos_venda', 'itens_venda',
+            'trocas_trade_in', 'interacoes_crm', 'encomendas_desejos', 'rotas_entrega'
+        ]
+
+    # 1. Busca dados da nuvem via HTTP em paralelo sem abrir transações no SQLite
     fetched_data = {}
-    for table in tables_to_sync:
+    headers = {'apikey': key, 'Authorization': f'Bearer {key}'}
+
+    def _fetch_one(table):
         try:
+            ctx = ssl.create_default_context()
             endpoint = f"{url}/rest/v1/{table}?select=*"
-            headers = {'apikey': key, 'Authorization': f'Bearer {key}'}
             req = urllib.request.Request(endpoint, headers=headers)
             with urllib.request.urlopen(req, context=ctx, timeout=6) as resp:
-                fetched_data[table] = json.loads(resp.read().decode('utf-8'))
+                return table, json.loads(resp.read().decode('utf-8'))
         except Exception as fe:
             sys.stderr.write(f"[Supabase Pull Fetch Aviso ({table})]: {fe}\n")
+            return table, None
+
+    if len(tables_to_sync) == 1:
+        t_name, rows = _fetch_one(tables_to_sync[0])
+        if rows is not None:
+            fetched_data[t_name] = rows
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(tables_to_sync)) as executor:
+            for t_name, rows in executor.map(_fetch_one, tables_to_sync):
+                if rows is not None:
+                    fetched_data[t_name] = rows
 
     if not fetched_data:
         return
 
-    # 2. Aplica atualizações no SQLite em transação rápida e isolada
+    # 2. Aplica atualizações no SQLite em transação rápida e isolada (respeitando ordem das tabelas)
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        for table, supa_rows in fetched_data.items():
+        for table in tables_to_sync:
+            if table not in fetched_data:
+                continue
+            supa_rows = fetched_data[table]
             try:
                 supa_ids = {row['id'] for row in supa_rows if 'id' in row}
                 
@@ -1655,6 +1704,26 @@ def init_db():
     except Exception as e:
         sys.stderr.write(f"[Supabase Post-Sync Reconciliação]: {e}\n")
 
+    _DB_INITIALIZED[0] = True
+    _LAST_SYNC_PULL[0] = _time.time()
+
+_INIT_LOCK = _threading.Lock()
+_DB_INITIALIZED = [False]
+_LAST_SYNC_PULL = [0.0]
+
+def ensure_serverless_ready():
+    with _INIT_LOCK:
+        now_ts = _time.time()
+        if not _DB_INITIALIZED[0] or not os.path.exists(DB_FILE):
+            init_db()
+        elif IS_VERCEL and (now_ts - _LAST_SYNC_PULL[0] > 4.0):
+            try:
+                sync_pull_from_supabase()
+                reconciliar_encomendas_atendidas()
+            except Exception as e:
+                sys.stderr.write(f"[Vercel Auto-Sync]: {e}\n")
+            _LAST_SYNC_PULL[0] = _time.time()
+
 def seed_sample_data(conn):
     c = conn.cursor()
     now_str = datetime.now().isoformat()
@@ -1767,6 +1836,7 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
 
         # Roteamento da API REST
         if path.startswith('/api/'):
+            ensure_serverless_ready()
             self.handle_api_get(path, query)
             return
 
@@ -1781,6 +1851,7 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
         path = parsed.path
 
         if path.startswith('/api/'):
+            ensure_serverless_ready()
             content_length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else '{}'
             try:
@@ -1788,11 +1859,13 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
             except Exception:
                 data = {}
             self.handle_api_post(path, data)
+            _LAST_SYNC_PULL[0] = _time.time()
             return
 
         self.send_error(404, "Endpoint não encontrado")
 
     def do_DELETE(self):
+        ensure_serverless_ready()
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         query = urllib.parse.parse_qs(parsed.query)
@@ -1997,6 +2070,7 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
             sys.stderr.write(f"do_DELETE error on {path}:\n{traceback.format_exc()}\n")
             self.send_json({'error': str(e)}, 500)
         finally:
+            _LAST_SYNC_PULL[0] = _time.time()
             if conn:
                 try:
                     conn.close()
@@ -2265,7 +2339,7 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json({'encomendas': encomendas})
                 return
 
-            # 8. Configurações (Lê do SQLite e do arquivo .env caso exista)
+            # 8. Configurações (Lê do SQLite, variáveis de ambiente e arquivo .env caso exista)
             if path == '/api/config':
                 c.execute('SELECT chave, valor FROM config_sistema')
                 config = {row['chave']: row['valor'] for row in c.fetchall()}
@@ -2279,14 +2353,22 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                                     k, v = line.split('=', 1)
                                     k = k.strip().lower()
                                     v = v.strip().strip('"').strip("'")
-                                    if 'url' in k:
+                                    if 'url' in k and 'jwks' not in k:
                                         config['supabase_url'] = v
-                                    elif 'key' in k and ('supabase' in k or 'anon' in k or 'service' in k):
+                                    elif 'key' in k and ('supabase' in k or 'anon' in k or 'service' in k or 'secret' in k or 'publishable' in k):
                                         config['supabase_key'] = v
                                     elif 'google' in k or 'maps' in k:
                                         config['google_maps_key'] = v
                     except Exception:
                         pass
+                supa_url, supa_key = get_supabase_headers()
+                if supa_url:
+                    config['supabase_url'] = supa_url
+                if supa_key:
+                    config['supabase_key'] = supa_key
+                gmaps_key = get_google_maps_key()
+                if gmaps_key:
+                    config['google_maps_key'] = gmaps_key
                 res_config = dict(config)
                 res_config['config'] = config
                 self.send_json(res_config)
@@ -2361,11 +2443,10 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
 
                 unique_name = f"disp_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}{ext}"
 
-                # Salva backup local em uploads/
-                uploads_dir = os.path.join(BASE_DIR, "uploads")
-                os.makedirs(uploads_dir, exist_ok=True)
-                local_path = os.path.join(uploads_dir, unique_name)
+                # Salva backup local em UPLOADS_DIR (protegido para ambientes Serverless)
                 try:
+                    os.makedirs(UPLOADS_DIR, exist_ok=True)
+                    local_path = os.path.join(UPLOADS_DIR, unique_name)
                     with open(local_path, "wb") as f:
                         f.write(file_bytes)
                 except Exception as fe:
@@ -2373,7 +2454,12 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
 
                 # Upload para Supabase Storage (bucket produtos)
                 cloud_url = upload_to_supabase_storage(file_bytes, unique_name, mime_type)
-                final_url = cloud_url if cloud_url else f"/uploads/{unique_name}"
+                if cloud_url:
+                    final_url = cloud_url
+                elif IS_VERCEL:
+                    final_url = f"data:{mime_type};base64,{base64_str}"
+                else:
+                    final_url = f"/uploads/{unique_name}"
 
                 self.send_json({
                     'success': True,
@@ -3253,6 +3339,7 @@ O Cedente acima qualificado declara sob as penas da lei (Art. 180 e Art. 299 do 
             sys.stderr.write(f"handle_api_post error on {path}:\n{traceback.format_exc()}\n")
             self.send_json({'error': str(e)}, 500)
         finally:
+            _LAST_SYNC_PULL[0] = _time.time()
             if conn:
                 try:
                     conn.close()

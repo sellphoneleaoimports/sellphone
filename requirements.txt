@@ -1,0 +1,1 @@
+# Projeto 100% construído com biblioteca padrão do Python 3 (sem dependências externas)
