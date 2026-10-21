@@ -25,7 +25,7 @@ class handler(AppleStoreHandler):
                 self.path = '/api/' + self.path
 
     def do_GET(self):
-        if self.path not in ('/', '', '/index.html', '/app.js', '/style.css', '/leao.jpg'):
+        if self.path not in ('/', '', '/index.html', '/entrega.html', '/app.js', '/style.css', '/leao.jpg') and not self.path.startswith('/entrega.html'):
             self._normalize_vercel_path()
         return super().do_GET()
 

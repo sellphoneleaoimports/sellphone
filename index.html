@@ -2281,6 +2281,58 @@
         </div>
     </div>
 
+    <!-- MODAL: LINK GERADO PARA O ENTREGADOR -->
+    <div id="modal-link-entregador" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden ios-modal-backdrop">
+        <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl p-6 space-y-4 ios-modal-sheet">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm font-bold">
+                        <i class="fa-solid fa-motorcycle"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-sm text-slate-900">Link da Rota para o Entregador</h3>
+                        <p class="text-[10px] text-slate-400">Envie este link para o entregador acessar a rota completa</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModal('modal-link-entregador')" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                <div class="flex items-center justify-between text-[11px] font-bold text-slate-600">
+                    <span><i class="fa-solid fa-link text-blue-600 mr-1"></i>Link Exclusivo da Entrega:</span>
+                    <span id="modal-link-entregador-resumo" class="text-emerald-700 font-mono text-[10px]"></span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="text" id="input-link-entregador-gerado" readonly
+                           class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:outline-none select-all">
+                    <button type="button" id="btn-copiar-link-modal" onclick="copiarLinkDoInputModal()"
+                            class="btn-pill-primary bg-slate-900 hover:bg-slate-800 text-white text-xs py-2 px-3.5 shrink-0 flex items-center gap-1.5 font-bold">
+                        <i class="fa-regular fa-copy"></i>
+                        <span>Copiar</span>
+                    </button>
+                </div>
+                <p class="text-[10px] text-slate-400 leading-relaxed">
+                    Nesta página o entregador verá a ordem das paradas, produtos, nomes dos clientes, observações e o botão direto para abrir a rota no Google Maps.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <a id="btn-abrir-pagina-entregador" href="#" target="_blank"
+                   class="btn-pill-secondary text-xs py-2.5 px-3 flex items-center justify-center gap-1.5 font-bold text-slate-700">
+                    <i class="fa-solid fa-arrow-up-right-from-square text-blue-600"></i>
+                    <span>Abrir Página</span>
+                </a>
+                <button type="button" id="btn-whatsapp-link-entregador" onclick="compartilharLinkEntregadorWhatsApp()"
+                        class="btn-pill-primary bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2.5 px-3 flex items-center justify-center gap-1.5 font-bold shadow-sm">
+                    <i class="fa-brands fa-whatsapp text-sm"></i>
+                    <span>Enviar no WhatsApp</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Script Principal Reativo -->
     <script src="app.js"></script>
 </body>

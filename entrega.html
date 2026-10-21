@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>Painel do Entregador — Leão Imports</title>
+
+    <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        body {
+            background-color: #f4f5f7;
+            color: #121316;
+            -webkit-font-smoothing: antialiased;
+        }
+        .bento-card {
+            background: #ffffff;
+            border-radius: 24px;
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04);
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-14">
+
+    <!-- Top Header -->
+    <header class="sticky top-0 z-30 bg-[#121316] text-white border-b border-white/10 shadow-md">
+        <div class="max-w-2xl mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+                <img src="leao.jpg" alt="Leão Imports" class="w-10 h-10 rounded-2xl object-cover border border-white/15 shrink-0">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-extrabold text-sm sm:text-base tracking-tight truncate">Leão Imports</h1>
+                        <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-yellow-400 text-slate-950 shrink-0">
+                            Rota de Entrega
+                        </span>
+                    </div>
+                    <p id="header-subtitulo" class="text-[11px] text-slate-400 truncate">Carregando informações da rota...</p>
+                </div>
+            </div>
+
+            <button type="button" onclick="carregarRota()" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/15 text-white flex items-center justify-center text-xs shrink-0 transition-colors" title="Atualizar dados da rota">
+                <i class="fa-solid fa-rotate-right"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-2xl mx-auto px-4 pt-5 space-y-4">
+
+        <!-- Loading State -->
+        <div id="estado-carregando" class="bento-card p-8 text-center space-y-3">
+            <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center mx-auto text-lg">
+                <i class="fa-solid fa-circle-notch fa-spin"></i>
+            </div>
+            <h2 class="font-bold text-sm text-slate-800">Carregando rota do entregador...</h2>
+            <p class="text-xs text-slate-400">Buscando paradas, produtos, clientes e link do GPS.</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="estado-erro" class="bento-card p-8 text-center space-y-3 hidden">
+            <div class="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto text-lg">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h2 id="erro-titulo" class="font-bold text-base text-slate-900">Rota não encontrada</h2>
+            <p id="erro-mensagem" class="text-xs text-slate-500 max-w-md mx-auto">
+                Verifique se o link enviado pela loja está completo ou solicite um novo link de rota.
+            </p>
+        </div>
+
+        <!-- Route Content -->
+        <div id="conteudo-rota" class="space-y-4 hidden">
+
+            <!-- Card Principal: Resumo & Botão Google Maps -->
+            <div class="bento-card p-5 space-y-4">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">
+                            <i class="fa-solid fa-motorcycle mr-1"></i>Painel do Entregador
+                        </span>
+                        <h2 id="rota-titulo-data" class="font-black text-base sm:text-lg text-slate-900 mt-2">Rota do Dia</h2>
+                        <p id="rota-id-label" class="text-[11px] font-mono text-slate-400"></p>
+                    </div>
+                    <div class="text-right">
+                        <span id="badge-progresso-entregas" class="inline-flex items-center gap-1 text-xs font-mono font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-800">
+                            0/0 entregues
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Métricas Rápidas -->
+                <div class="grid grid-cols-3 gap-2.5 pt-1">
+                    <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                        <span class="text-[10px] font-bold uppercase text-slate-400 block">Paradas</span>
+                        <span id="metrica-paradas" class="font-mono font-black text-base sm:text-lg text-slate-900">0</span>
+                    </div>
+                    <div class="p-3 rounded-2xl bg-blue-50/50 border border-blue-100">
+                        <span class="text-[10px] font-bold uppercase text-blue-600 block">Distância</span>
+                        <span id="metrica-km" class="font-mono font-black text-base sm:text-lg text-blue-700">-- km</span>
+                    </div>
+                    <div class="p-3 rounded-2xl bg-emerald-50/50 border border-emerald-100">
+                        <span class="text-[10px] font-bold uppercase text-emerald-600 block">Tempo Est.</span>
+                        <span id="metrica-tempo" class="font-mono font-black text-base sm:text-lg text-emerald-700">-- min</span>
+                    </div>
+                </div>
+
+                <!-- Ponto de Partida (Loja) -->
+                <div class="flex items-center gap-3 p-3.5 bg-slate-900 text-white rounded-2xl">
+                    <div class="w-9 h-9 rounded-xl bg-yellow-400 text-slate-950 flex items-center justify-center font-black text-xs shrink-0">
+                        <i class="fa-solid fa-store"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-yellow-400 block">Ponto de Partida &bull; Loja Leão Imports</span>
+                        <p id="rota-origem-endereco" class="text-xs text-slate-200 font-medium break-words">--</p>
+                    </div>
+                </div>
+
+                <!-- Botão Principal: Abrir Rota Completa no Google Maps -->
+                <a id="btn-google-maps-principal" href="#" target="_blank"
+                   class="w-full py-4 px-5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-600/20 transition-all">
+                    <i class="fa-solid fa-map-location-dot text-lg"></i>
+                    <span>Abrir Rota Completa no Google Maps</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square text-xs opacity-80"></i>
+                </a>
+            </div>
+
+            <!-- Cabeçalho da Lista de Paradas -->
+            <div class="flex items-center justify-between px-1 pt-1">
+                <h3 class="font-black text-sm text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-list-ol text-blue-600"></i>
+                    <span>Sequência de Entregas</span>
+                </h3>
+                <span class="text-[11px] text-slate-500">Siga a ordem abaixo</span>
+            </div>
+
+            <!-- Lista de Cards de Paradas -->
+            <div id="lista-paradas-entregador" class="space-y-3.5">
+                <!-- Preenchido via JS -->
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        let RotaEstado = null;
+
+        function obterParametroId() {
+            const params = new URLSearchParams(window.location.search);
+            return (params.get('id') || '').trim();
+        }
+
+        function formatarDataHora(isoStr) {
+            if (!isoStr) return 'Data não informada';
+            const d = new Date(isoStr);
+            if (isNaN(d.getTime())) return isoStr;
+            return d.toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function escaparHtml(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function construirLinkGoogleMapsFallback(origem, paradas) {
+            const enderecos = (paradas || []).map(p => (p.endereco || '').trim()).filter(Boolean);
+            if (enderecos.length === 0) {
+                return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(origem || 'Belo Horizonte')}`;
+            }
+            const destino = enderecos[enderecos.length - 1];
+            const intermediarias = enderecos.slice(0, -1);
+            let url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origem || '')}&destination=${encodeURIComponent(destino)}&travelmode=driving`;
+            if (intermediarias.length > 0) {
+                url += `&waypoints=${encodeURIComponent(intermediarias.join('|'))}`;
+            }
+            return url;
+        }
+
+        async function carregarRota() {
+            const rotaId = obterParametroId();
+            const elLoading = document.getElementById('estado-carregando');
+            const elErro = document.getElementById('estado-erro');
+            const elConteudo = document.getElementById('conteudo-rota');
+
+            if (!rotaId) {
+                elLoading.classList.add('hidden');
+                elConteudo.classList.add('hidden');
+                elErro.classList.remove('hidden');
+                document.getElementById('erro-titulo').innerText = 'Link sem código de rota';
+                document.getElementById('erro-mensagem').innerText = 'Este link não contém o identificador da rota (?id=...). Solicite o link completo para a loja Leão Imports.';
+                return;
+            }
+
+            try {
+                elLoading.classList.remove('hidden');
+                elErro.classList.add('hidden');
+
+                const resp = await fetch(`/api/rotas?id=${encodeURIComponent(rotaId)}`);
+                const data = await resp.json();
+
+                if (!resp.ok || !data.rota) {
+                    throw new Error(data.error || 'Rota não encontrada ou removida.');
+                }
+
+                RotaEstado = data.rota;
+                elLoading.classList.add('hidden');
+                elConteudo.classList.remove('hidden');
+                renderizarRotaEntregador();
+            } catch (err) {
+                console.error('Erro ao carregar rota:', err);
+                elLoading.classList.add('hidden');
+                elConteudo.classList.add('hidden');
+                elErro.classList.remove('hidden');
+                document.getElementById('erro-titulo').innerText = 'Não foi possível abrir esta rota';
+                document.getElementById('erro-mensagem').innerText = err.message || 'Erro de conexão com o servidor.';
+            }
+        }
+
+        function renderizarRotaEntregador() {
+            if (!RotaEstado) return;
+
+            const paradas = Array.isArray(RotaEstado.paradas_detalhes) ? RotaEstado.paradas_detalhes : [];
+            const totalParadas = paradas.length || Number(RotaEstado.total_paradas || 0);
+            const entregues = paradas.filter(p => p.status_parada === 'Entregue').length;
+
+            const dataFmt = formatarDataHora(RotaEstado.data_rota || RotaEstado.created_at);
+            document.getElementById('header-subtitulo').innerText = `${totalParadas} parada(s) • ${dataFmt}`;
+            document.getElementById('rota-titulo-data').innerText = `Roteiro de Entrega • ${dataFmt.split(',')[0]}`;
+            document.getElementById('rota-id-label').innerText = `Código: ${RotaEstado.id}`;
+
+            const badgeProg = document.getElementById('badge-progresso-entregas');
+            badgeProg.innerText = `${entregues}/${totalParadas} entregues`;
+            badgeProg.className = entregues === totalParadas && totalParadas > 0
+                ? 'inline-flex items-center gap-1 text-xs font-mono font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800'
+                : 'inline-flex items-center gap-1 text-xs font-mono font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-800';
+
+            document.getElementById('metrica-paradas').innerText = `${totalParadas}`;
+            const km = Number(RotaEstado.distancia_km || 0);
+            document.getElementById('metrica-km').innerText = km > 0 ? `${km.toFixed(1)} km` : '--';
+            const min = Number(RotaEstado.tempo_estimado_min || 0);
+            document.getElementById('metrica-tempo').innerText = min > 0 ? `~${min} min` : '--';
+
+            document.getElementById('rota-origem-endereco').innerText = RotaEstado.endereco_origem || 'Loja Leão Imports';
+
+            const linkMaps = RotaEstado.link_google_maps || construirLinkGoogleMapsFallback(RotaEstado.endereco_origem, paradas);
+            const btnMaps = document.getElementById('btn-google-maps-principal');
+            btnMaps.href = linkMaps;
+
+            const container = document.getElementById('lista-paradas-entregador');
+            if (paradas.length === 0) {
+                container.innerHTML = `
+                    <div class="bento-card p-6 text-center text-xs text-slate-400">
+                        Nenhuma parada detalhada cadastrada nesta rota. Use o botão do Google Maps acima para abrir o trajeto.
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = paradas.map((p, idx) => {
+                const num = idx + 1;
+                const ehUltima = idx === paradas.length - 1;
+                const concluida = p.status_parada === 'Entregue';
+                const nomeCliente = escaparHtml(p.cliente_nome || 'Cliente');
+                const produto = escaparHtml(p.dispositivos || 'Produto Leão Imports');
+                const numPedido = escaparHtml(p.numero_pedido || '');
+                const endereco = escaparHtml(p.endereco || 'Endereço não informado');
+                const obs = escaparHtml(p.observacao || '');
+
+                const telLimpo = String(p.telefone_whatsapp || '').replace(/\D/g, '');
+                const telZap = telLimpo ? (telLimpo.startsWith('55') ? telLimpo : `55${telLimpo}`) : '';
+                const msgZap = encodeURIComponent(`Olá, ${p.cliente_nome || 'Cliente'}! Sou o entregador da Leão Imports e estou a caminho com o seu pedido (${p.dispositivos || 'aparelho'}).`);
+
+                const gpsIndividualUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.endereco || '')}`;
+
+                let trechoBadge = '';
+                if (p.perna_km !== undefined && p.perna_km !== null) {
+                    const pKm = Number(p.perna_km);
+                    const distTxt = pKm < 1 ? `+${Math.round(pKm * 1000)} m` : `+${pKm.toFixed(1)} km`;
+                    const minTxt = p.perna_min ? ` • ~${p.perna_min} min` : '';
+                    trechoBadge = `<span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">${distTxt}${minTxt}</span>`;
+                }
+
+                return `
+                    <div class="bento-card p-4 sm:p-5 space-y-3.5 transition-all ${concluida ? 'border-emerald-300 bg-emerald-50/20' : ''}">
+                        <!-- Topo do Card da Parada -->
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="w-9 h-9 rounded-2xl ${concluida ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-yellow-400'} flex items-center justify-center font-black text-sm shrink-0">
+                                    ${concluida ? '<i class="fa-solid fa-check"></i>' : num}
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="flex items-center flex-wrap gap-1.5">
+                                        <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full ${ehUltima ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-700'}">
+                                            ${ehUltima ? `${num}ª Parada • Destino Final` : `${num}ª Parada`}
+                                        </span>
+                                        ${trechoBadge}
+                                        ${numPedido ? `<span class="text-[10px] font-mono text-slate-400">${numPedido}</span>` : ''}
+                                    </div>
+                                    <h4 class="font-extrabold text-sm sm:text-base text-slate-900 mt-1 break-words">${nomeCliente}</h4>
+                                </div>
+                            </div>
+
+                            <button type="button" onclick="alternarStatusEntrega(${idx})"
+                                    class="px-3 py-1.5 rounded-full text-xs font-bold shrink-0 flex items-center gap-1.5 border transition-all ${concluida ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}">
+                                <i class="fa-solid ${concluida ? 'fa-circle-check' : 'fa-circle'} text-[11px]"></i>
+                                <span>${concluida ? 'Entregue' : 'Marcar Entregue'}</span>
+                            </button>
+                        </div>
+
+                        <!-- Produto a Entregar -->
+                        <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start gap-2.5">
+                            <div class="w-7 h-7 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xs shrink-0 mt-0.5">
+                                <i class="fa-solid fa-box-open"></i>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Produto / Pedido</span>
+                                <p class="text-xs sm:text-sm font-bold text-slate-900 break-words">${produto}</p>
+                            </div>
+                        </div>
+
+                        <!-- Endereço de Entrega -->
+                        <div class="p-3 rounded-2xl bg-blue-50/40 border border-blue-200/70 flex items-start justify-between gap-2.5">
+                            <div class="flex items-start gap-2.5 min-w-0 flex-1">
+                                <div class="w-7 h-7 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center text-xs shrink-0 mt-0.5">
+                                    <i class="fa-solid fa-location-dot"></i>
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">Endereço de Entrega</span>
+                                    <p class="text-xs sm:text-sm font-semibold text-slate-800 break-words">${endereco}</p>
+                                </div>
+                            </div>
+                            <a href="${gpsIndividualUrl}" target="_blank"
+                               class="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shrink-0 flex items-center gap-1.5 shadow-xs">
+                                <i class="fa-solid fa-diamond-turn-right"></i>
+                                <span>GPS</span>
+                            </a>
+                        </div>
+
+                        <!-- Campo de Observação (Visível e Editável) -->
+                        <div class="p-3 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2">
+                            <div class="flex items-center justify-between">
+                                <label for="obs-input-${idx}" class="text-[11px] font-bold text-amber-900 flex items-center gap-1.5">
+                                    <i class="fa-regular fa-note-sticky text-amber-600"></i>
+                                    <span>Observação da Entrega</span>
+                                </label>
+                                <span id="status-obs-${idx}" class="text-[10px] font-bold text-emerald-700 hidden">
+                                    <i class="fa-solid fa-check mr-0.5"></i>Salvo
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="text" id="obs-input-${idx}" value="${obs}"
+                                       placeholder="Nenhuma observação. Toque para anotar (ex: entregue na portaria)..."
+                                       class="w-full bg-white border border-amber-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                                <button type="button" onclick="salvarObservacaoParada(${idx})"
+                                        class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shrink-0">
+                                    Salvar
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Ações de Contato com o Cliente -->
+                        ${telZap ? `
+                            <div class="flex items-center gap-2 pt-1">
+                                <a href="https://wa.me/${telZap}?text=${msgZap}" target="_blank"
+                                   class="flex-1 py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors">
+                                    <i class="fa-brands fa-whatsapp text-sm text-emerald-600"></i>
+                                    <span>Chamar Cliente no WhatsApp</span>
+                                </a>
+                                <a href="tel:${telLimpo}"
+                                   class="py-2.5 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors">
+                                    <i class="fa-solid fa-phone text-xs"></i>
+                                    <span>Ligar</span>
+                                </a>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function salvarObservacaoParada(idx) {
+            if (!RotaEstado) return;
+            const input = document.getElementById(`obs-input-${idx}`);
+            const badge = document.getElementById(`status-obs-${idx}`);
+            const novaObs = input ? input.value.trim() : '';
+
+            try {
+                const resp = await fetch('/api/rotas/observacao', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        rota_id: RotaEstado.id,
+                        indice: idx,
+                        observacao: novaObs
+                    })
+                });
+                const data = await resp.json();
+                if (!resp.ok || data.error) throw new Error(data.error || 'Erro ao salvar observação');
+
+                if (Array.isArray(data.paradas_detalhes)) {
+                    RotaEstado.paradas_detalhes = data.paradas_detalhes;
+                } else if (RotaEstado.paradas_detalhes && RotaEstado.paradas_detalhes[idx]) {
+                    RotaEstado.paradas_detalhes[idx].observacao = novaObs;
+                }
+
+                if (badge) {
+                    badge.classList.remove('hidden');
+                    setTimeout(() => badge.classList.add('hidden'), 2500);
+                }
+            } catch (err) {
+                alert(`Não foi possível salvar a observação: ${err.message}`);
+            }
+        }
+
+        async function alternarStatusEntrega(idx) {
+            if (!RotaEstado || !Array.isArray(RotaEstado.paradas_detalhes)) return;
+            const parada = RotaEstado.paradas_detalhes[idx];
+            if (!parada) return;
+
+            const novoStatus = parada.status_parada === 'Entregue' ? 'Pendente' : 'Entregue';
+            const inputObs = document.getElementById(`obs-input-${idx}`);
+            const obsAtual = inputObs ? inputObs.value.trim() : (parada.observacao || '');
+
+            try {
+                const resp = await fetch('/api/rotas/observacao', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        rota_id: RotaEstado.id,
+                        indice: idx,
+                        observacao: obsAtual,
+                        status_parada: novoStatus
+                    })
+                });
+                const data = await resp.json();
+                if (!resp.ok || data.error) throw new Error(data.error || 'Erro ao atualizar status');
+
+                if (Array.isArray(data.paradas_detalhes)) {
+                    RotaEstado.paradas_detalhes = data.paradas_detalhes;
+                } else {
+                    parada.status_parada = novoStatus;
+                }
+                renderizarRotaEntregador();
+            } catch (err) {
+                alert(`Não foi possível atualizar o status: ${err.message}`);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', carregarRota);
+    </script>
+</body>
+</html>

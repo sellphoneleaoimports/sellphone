@@ -35,6 +35,8 @@ const AppState = {
     rotaAtualCalculada: null,
     filtroRotasBusca: '',
     ordemManualParadas: [],
+    observacoesParadasRota: {},
+    ultimaRotaSalvaInfo: null,
     supabaseClient: null
 };
 
@@ -4280,7 +4282,7 @@ function renderRotas() {
     // Atualiza Botão "Salvar Rota no Histórico"
     const btnSalvar = document.getElementById('btn-salvar-rota-bd');
     if (btnSalvar) {
-        if (AppState.rotaAtualCalculada && totalSelecionados > 0) {
+        if (totalSelecionados > 0) {
             btnSalvar.classList.remove('hidden');
         } else {
             btnSalvar.classList.add('hidden');
@@ -4374,13 +4376,18 @@ async function calcularRotaEntregas() {
         return;
     }
 
-    const paradasPayload = pedidosSelecionados.map(p => ({
+    const paradasPayload = pedidosSelecionados.map((p, idx) => ({
+        ordem: idx + 1,
         pedido_id: p.id,
+        numero_pedido: p.numero_pedido || '',
         cliente_id: p.cliente_id,
         cliente_nome: p.cliente_nome,
         telefone_whatsapp: p.telefone_whatsapp,
         dispositivos: p.dispositivos_descricao,
-        endereco: obterEnderecoCliente(p)
+        endereco: obterEnderecoCliente(p),
+        observacao: (AppState.observacoesParadasRota && AppState.observacoesParadasRota[p.id] !== undefined)
+            ? AppState.observacoesParadasRota[p.id]
+            : (p.observacoes || '')
     }));
 
     const btnCalcular = document.getElementById('btn-calcular-rota');
@@ -4500,16 +4507,65 @@ function aoClicarAbrirGoogleMaps(e) {
     window.open(linkDireto, '_blank');
 }
 
+function atualizarObservacaoParadaRota(pedidoId, valor) {
+    if (!AppState.observacoesParadasRota) AppState.observacoesParadasRota = {};
+    AppState.observacoesParadasRota[pedidoId] = valor;
+}
+
 async function salvarRotaNoHistorico() {
-    if (!AppState.rotaAtualCalculada) {
-        alert("Calcule uma rota primeiro antes de salvar no histórico.");
+    const pedidosSelecionados = AppState.pedidos.filter(p => AppState.pedidosSelecionadosRotas.has(p.id));
+    if (pedidosSelecionados.length === 0) {
+        alert("Selecione ao menos um pedido para montar e salvar a rota.");
+        return;
+    }
+
+    const semEndereco = pedidosSelecionados.filter(p => !obterEnderecoCliente(p));
+    if (semEndereco.length > 0) {
+        const nomes = semEndereco.map(p => p.cliente_nome || 'Cliente').join(', ');
+        alert(`Atenção: O(s) pedido(s) de [${nomes}] está(ão) sem endereço cadastrado. Preencha o endereço antes de salvar a rota.`);
         return;
     }
 
     const origInput = document.getElementById('rota-endereco-origem');
-    const origem = (origInput ? origInput.value : AppState.origemPadraoRota || '').trim();
-    const pedidosIds = Array.from(AppState.pedidosSelecionadosRotas);
-    const paradasDetalhes = AppState.ordemManualParadas || [];
+    const origem = (origInput ? origInput.value : AppState.origemPadraoRota || '').trim() || 'Loja Leão Imports';
+    const pedidosIds = pedidosSelecionados.map(p => p.id);
+    const enderecos = pedidosSelecionados.map(p => obterEnderecoCliente(p)).filter(Boolean);
+
+    const paradasCalculadas = (AppState.rotaAtualCalculada && Array.isArray(AppState.rotaAtualCalculada.paradas))
+        ? AppState.rotaAtualCalculada.paradas
+        : [];
+
+    const paradasDetalhes = pedidosSelecionados.map((p, idx) => {
+        const end = obterEnderecoCliente(p);
+        const normEnd = (end || '').trim().toLowerCase();
+        const infoCalc = paradasCalculadas.find(pc => pc.pedido_id === p.id || (pc.endereco || '').trim().toLowerCase() === normEnd) || paradasCalculadas[idx] || {};
+        const obs = (AppState.observacoesParadasRota && AppState.observacoesParadasRota[p.id] !== undefined)
+            ? AppState.observacoesParadasRota[p.id]
+            : (p.observacoes || '');
+
+        return {
+            ordem: idx + 1,
+            pedido_id: p.id,
+            numero_pedido: p.numero_pedido || '',
+            cliente_id: p.cliente_id || '',
+            cliente_nome: p.cliente_nome || 'Cliente',
+            telefone_whatsapp: p.telefone_whatsapp || '',
+            dispositivos: p.dispositivos_descricao || 'Aparelho Apple',
+            endereco: end,
+            endereco_encontrado: infoCalc.endereco_encontrado || '',
+            perna_km: infoCalc.perna_km !== undefined ? infoCalc.perna_km : null,
+            perna_min: infoCalc.perna_min !== undefined ? infoCalc.perna_min : null,
+            observacao: obs,
+            status_parada: 'Pendente'
+        };
+    });
+
+    const linkGoogleMaps = (AppState.rotaAtualCalculada && AppState.rotaAtualCalculada.link_google_maps)
+        ? AppState.rotaAtualCalculada.link_google_maps
+        : construirLinkGoogleMapsClientSide(origem, enderecos);
+
+    const distanciaKm = AppState.rotaAtualCalculada ? (AppState.rotaAtualCalculada.distancia_km || 0) : 0;
+    const tempoMin = AppState.rotaAtualCalculada ? (AppState.rotaAtualCalculada.tempo_estimado_min || 0) : 0;
 
     try {
         const resp = await fetch('/api/rotas', {
@@ -4518,12 +4574,12 @@ async function salvarRotaNoHistorico() {
             body: JSON.stringify({
                 origem: origem,
                 total_paradas: pedidosIds.length,
-                distancia_km: AppState.rotaAtualCalculada.distancia_km,
-                tempo_estimado_min: AppState.rotaAtualCalculada.tempo_estimado_min,
+                distancia_km: distanciaKm,
+                tempo_estimado_min: tempoMin,
                 pedidos_ids: pedidosIds,
                 paradas_detalhes: paradasDetalhes,
-                link_google_maps: AppState.rotaAtualCalculada.link_google_maps,
-                status: 'Concluída'
+                link_google_maps: linkGoogleMaps,
+                status: 'Em Trânsito'
             })
         });
 
@@ -4537,11 +4593,74 @@ async function salvarRotaNoHistorico() {
         AppState.rotas = rotasRes.rotas || [];
 
         renderHistoricoRotas();
-        alert("Rota salva no histórico com sucesso e sincronizada com o banco de dados!");
+        abrirModalLinkEntregador(data.id, paradasDetalhes.length, distanciaKm, tempoMin);
     } catch (err) {
         console.error("Erro ao salvar rota no histórico:", err);
         alert(`Erro ao salvar rota: ${err.message}`);
     }
+}
+
+function obterUrlPaginaEntregador(rotaId) {
+    return `${window.location.origin}/entrega.html?id=${encodeURIComponent(rotaId)}`;
+}
+
+function abrirModalLinkEntregador(rotaId, totalParadas, distanciaKm, tempoMin) {
+    const link = obterUrlPaginaEntregador(rotaId);
+    AppState.ultimaRotaSalvaInfo = {
+        id: rotaId,
+        link: link,
+        totalParadas: totalParadas || 0,
+        distanciaKm: distanciaKm || 0,
+        tempoMin: tempoMin || 0
+    };
+
+    const inputEl = document.getElementById('input-link-entregador-gerado');
+    if (inputEl) inputEl.value = link;
+
+    const resumoEl = document.getElementById('modal-link-entregador-resumo');
+    if (resumoEl) {
+        const kmTxt = distanciaKm > 0 ? ` • ${Number(distanciaKm).toFixed(1)} km` : '';
+        resumoEl.innerText = `${totalParadas || 0} parada(s)${kmTxt}`;
+    }
+
+    const btnAbrir = document.getElementById('btn-abrir-pagina-entregador');
+    if (btnAbrir) btnAbrir.href = link;
+
+    openModal('modal-link-entregador');
+}
+
+function copiarLinkDoInputModal() {
+    const inputEl = document.getElementById('input-link-entregador-gerado');
+    if (!inputEl || !inputEl.value) return;
+    navigator.clipboard.writeText(inputEl.value).then(() => {
+        const btn = document.getElementById('btn-copiar-link-modal');
+        if (btn) {
+            const orig = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-check text-emerald-400"></i> <span>Copiado!</span>`;
+            setTimeout(() => { btn.innerHTML = orig; }, 2000);
+        }
+    }).catch(() => {
+        inputEl.select();
+        document.execCommand('copy');
+        alert("Link do entregador copiado!");
+    });
+}
+
+function copiarLinkEntregador(rotaId) {
+    const link = obterUrlPaginaEntregador(rotaId);
+    navigator.clipboard.writeText(link).then(() => {
+        alert(`✅ Link do entregador copiado para a área de transferência!\n\n${link}`);
+    }).catch(() => {
+        prompt("Copie o link abaixo para enviar ao entregador:", link);
+    });
+}
+
+function compartilharLinkEntregadorWhatsApp() {
+    const info = AppState.ultimaRotaSalvaInfo;
+    if (!info || !info.link) return;
+    const kmStr = info.distanciaKm > 0 ? `\n🛣️ Distância: *${Number(info.distanciaKm).toFixed(1)} km* (~${info.tempoMin || 1} min)` : '';
+    const msg = `🛵 *ROTA DE ENTREGAS — LEÃO IMPORTS*\n\n📦 Total de entregas: *${info.totalParadas} parada(s)*${kmStr}\n\nAcesse o painel abaixo para ver os clientes, produtos, observações de cada entrega e abrir a rota completa no Google Maps:\n👉 ${info.link}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 function editarDistanciaManual() {
@@ -4751,45 +4870,63 @@ function renderRoteiroSequencia() {
             `;
         }
 
+        const obsAtual = (AppState.observacoesParadasRota && AppState.observacoesParadasRota[p.id] !== undefined)
+            ? AppState.observacoesParadasRota[p.id]
+            : (p.observacoes || '');
+        const obsEscaped = String(obsAtual).replace(/"/g, '&quot;');
+
         html += `
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-white rounded-2xl border border-slate-200 hover:border-slate-300 transition-all shadow-xs">
-                <div class="flex items-center gap-3 min-w-0 flex-1">
-                    <div class="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-black text-xs shrink-0 border border-blue-200">
-                        ${paradaNum}
-                    </div>
-                    <div class="min-w-0 flex-1">
-                        <div class="flex items-center flex-wrap gap-1.5">
-                            <span class="font-bold text-xs text-slate-900">${p.cliente_nome || 'Cliente'}</span>
-                            <span class="text-[10px] px-2 py-0.5 rounded-full ${ehUltima ? 'bg-purple-100 text-purple-800 font-bold' : 'bg-slate-100 text-slate-600'}">
-                                ${ehUltima ? 'Destino Final' : `Parada ${paradaNum}`}
-                            </span>
-                            ${badgeTrechoHtml}
+            <div class="flex flex-col gap-2.5 p-3.5 bg-white rounded-2xl border border-slate-200 hover:border-slate-300 transition-all shadow-xs">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                        <div class="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-black text-xs shrink-0 border border-blue-200">
+                            ${paradaNum}
                         </div>
-                        <p class="text-xs text-slate-600 truncate mt-0.5">
-                            <i class="fa-solid fa-location-dot text-slate-400 mr-1 text-[11px]"></i>
-                            ${endereco || '<span class="text-amber-600 font-bold">Endereço não cadastrado</span>'}
-                        </p>
-                        ${endConfirmadoHtml}
-                        <p class="text-[11px] text-slate-400 truncate mt-0.5">
-                            ${p.dispositivos_descricao || 'Aparelho Apple'} &bull; ${p.telefone_whatsapp || ''}
-                        </p>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center flex-wrap gap-1.5">
+                                <span class="font-bold text-xs text-slate-900">${p.cliente_nome || 'Cliente'}</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full ${ehUltima ? 'bg-purple-100 text-purple-800 font-bold' : 'bg-slate-100 text-slate-600'}">
+                                    ${ehUltima ? 'Destino Final' : `Parada ${paradaNum}`}
+                                </span>
+                                ${badgeTrechoHtml}
+                            </div>
+                            <p class="text-xs text-slate-600 truncate mt-0.5">
+                                <i class="fa-solid fa-location-dot text-slate-400 mr-1 text-[11px]"></i>
+                                ${endereco || '<span class="text-amber-600 font-bold">Endereço não cadastrado</span>'}
+                            </p>
+                            ${endConfirmadoHtml}
+                            <p class="text-[11px] text-slate-400 truncate mt-0.5">
+                                ${p.dispositivos_descricao || 'Aparelho Apple'} &bull; ${p.telefone_whatsapp || ''}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 shrink-0 justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                        <button type="button" onclick="moverParadaSequencia(${idx}, -1)" ${idx === 0 ? 'disabled class="opacity-30 cursor-not-allowed"' : 'class="hover:bg-slate-100"'} class="w-7 h-7 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center text-xs" title="Mover parada para cima">
+                            <i class="fa-solid fa-chevron-up"></i>
+                        </button>
+                        <button type="button" onclick="moverParadaSequencia(${idx}, 1)" ${ehUltima ? 'disabled class="opacity-30 cursor-not-allowed"' : 'class="hover:bg-slate-100"'} class="w-7 h-7 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center text-xs" title="Mover parada para baixo">
+                            <i class="fa-solid fa-chevron-down"></i>
+                        </button>
+                        <button type="button" onclick="abrirAvisoWhatsAppEntrega('${p.id}')" class="btn-pill-secondary text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-xs py-1.5 px-2.5 flex items-center gap-1 font-bold" title="Avisar cliente no WhatsApp">
+                            <i class="fa-brands fa-whatsapp"></i>
+                            <span class="hidden sm:inline">WhatsApp</span>
+                        </button>
+                        <button type="button" onclick="abrirGoogleMapsIndividual('${p.id}')" class="btn-pill-secondary text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-xs py-1.5 px-2 flex items-center gap-1 font-bold" title="Abrir GPS individual no Google Maps">
+                            <i class="fa-solid fa-location-dot"></i>
+                        </button>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-1.5 shrink-0 justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                    <button type="button" onclick="moverParadaSequencia(${idx}, -1)" ${idx === 0 ? 'disabled class="opacity-30 cursor-not-allowed"' : 'class="hover:bg-slate-100"'} class="w-7 h-7 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center text-xs" title="Mover parada para cima">
-                        <i class="fa-solid fa-chevron-up"></i>
-                    </button>
-                    <button type="button" onclick="moverParadaSequencia(${idx}, 1)" ${ehUltima ? 'disabled class="opacity-30 cursor-not-allowed"' : 'class="hover:bg-slate-100"'} class="w-7 h-7 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center text-xs" title="Mover parada para baixo">
-                        <i class="fa-solid fa-chevron-down"></i>
-                    </button>
-                    <button type="button" onclick="abrirAvisoWhatsAppEntrega('${p.id}')" class="btn-pill-secondary text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-xs py-1.5 px-2.5 flex items-center gap-1 font-bold" title="Avisar cliente no WhatsApp">
-                        <i class="fa-brands fa-whatsapp"></i>
-                        <span class="hidden sm:inline">WhatsApp</span>
-                    </button>
-                    <button type="button" onclick="abrirGoogleMapsIndividual('${p.id}')" class="btn-pill-secondary text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-xs py-1.5 px-2 flex items-center gap-1 font-bold" title="Abrir GPS individual no Google Maps">
-                        <i class="fa-solid fa-location-dot"></i>
-                    </button>
+                <div class="flex items-center gap-2 pl-0 sm:pl-11 pt-1 border-t border-slate-100">
+                    <span class="text-[11px] font-bold text-slate-500 shrink-0 flex items-center gap-1">
+                        <i class="fa-regular fa-note-sticky text-amber-500"></i> Obs. Entregador:
+                    </span>
+                    <input type="text"
+                           value="${obsEscaped}"
+                           oninput="atualizarObservacaoParadaRota('${p.id}', this.value)"
+                           placeholder="Ex: Entregar na portaria, ligar ao chegar, cobrar frete..."
+                           class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-400">
                 </div>
             </div>
         `;
@@ -4969,7 +5106,15 @@ function renderHistoricoRotas() {
                 <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${kmStr}</td>
                 <td class="py-2.5 px-3 text-slate-600 font-mono">${tempoStr}</td>
                 <td class="py-2.5 px-3 text-right">
-                    <div class="flex items-center justify-end gap-1.5">
+                    <div class="flex items-center justify-end gap-1.5 flex-wrap">
+                        <button type="button" onclick="copiarLinkEntregador('${r.id}')" class="btn-pill-secondary text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-xs py-1 px-2.5 flex items-center gap-1 font-bold" title="Copiar link da página do entregador">
+                            <i class="fa-solid fa-link"></i>
+                            <span>Link Entregador</span>
+                        </button>
+                        <a href="/entrega.html?id=${encodeURIComponent(r.id)}" target="_blank" class="btn-pill-secondary text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-xs py-1 px-2.5 flex items-center gap-1 font-bold" title="Abrir página do entregador em nova aba">
+                            <i class="fa-solid fa-motorcycle"></i>
+                            <span>Abrir Página</span>
+                        </a>
                         ${r.link_google_maps ? `
                             <a href="${r.link_google_maps}" target="_blank" class="btn-pill-secondary text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-xs py-1 px-2.5 flex items-center gap-1 font-bold" title="Reabrir rota no Google Maps">
                                 <i class="fa-solid fa-map-location-dot"></i>

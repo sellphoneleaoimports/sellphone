@@ -2381,8 +2381,70 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json({'modelos': rows})
                 return
 
-            # 10. Rotas de Entrega Logística
+            # 10. Rotas de Entrega Logística (Lista completa ou Rota individual por ?id=...)
             if path == '/api/rotas':
+                rota_id = query.get('id', [None])[0] if query else None
+                if rota_id:
+                    c.execute('SELECT * FROM rotas_entrega WHERE id = ?', (rota_id,))
+                    row = c.fetchone()
+                    if not row:
+                        conn.close()
+                        try:
+                            sync_pull_from_supabase('rotas_entrega')
+                        except Exception:
+                            pass
+                        conn = get_db_connection()
+                        c = conn.cursor()
+                        c.execute('SELECT * FROM rotas_entrega WHERE id = ?', (rota_id,))
+                        row = c.fetchone()
+                    if not row:
+                        self.send_json({'error': 'Rota de entrega não encontrada.'}, 404)
+                        return
+                    item = dict(row)
+                    if item.get('pedidos_ids'):
+                        try: item['pedidos_ids'] = json.loads(item['pedidos_ids']) if isinstance(item['pedidos_ids'], str) else item['pedidos_ids']
+                        except Exception: item['pedidos_ids'] = []
+                    if item.get('paradas_detalhes'):
+                        try: item['paradas_detalhes'] = json.loads(item['paradas_detalhes']) if isinstance(item['paradas_detalhes'], str) else item['paradas_detalhes']
+                        except Exception: item['paradas_detalhes'] = []
+
+                    # Enriquecer paradas com dados atualizados do pedido/cliente caso falte algum campo
+                    paradas_lista = item.get('paradas_detalhes') if isinstance(item.get('paradas_detalhes'), list) else []
+                    for p_det in paradas_lista:
+                        if not isinstance(p_det, dict):
+                            continue
+                        ped_id = p_det.get('pedido_id') or p_det.get('id')
+                        if ped_id:
+                            c.execute('''
+                                SELECT p.numero_pedido, p.observacoes as pedido_obs, c.nome as cliente_nome,
+                                       c.telefone_whatsapp, c.endereco as cliente_endereco, c.observacoes as cliente_obs,
+                                       (SELECT GROUP_CONCAT(d.modelo || ' (' || d.capacidade || ' - ' || d.cor || ')', ', ')
+                                        FROM itens_venda iv
+                                        JOIN dispositivos d ON d.id = iv.dispositivo_id
+                                        WHERE iv.pedido_id = p.id) as dispositivos_descricao
+                                FROM pedidos_venda p
+                                LEFT JOIN clientes c ON c.id = p.cliente_id
+                                WHERE p.id = ?
+                            ''', (ped_id,))
+                            ped_row = c.fetchone()
+                            if ped_row:
+                                pr = dict(ped_row)
+                                if not p_det.get('numero_pedido'):
+                                    p_det['numero_pedido'] = pr.get('numero_pedido')
+                                if not p_det.get('cliente_nome'):
+                                    p_det['cliente_nome'] = pr.get('cliente_nome')
+                                if not p_det.get('telefone_whatsapp'):
+                                    p_det['telefone_whatsapp'] = pr.get('telefone_whatsapp')
+                                if not p_det.get('dispositivos'):
+                                    p_det['dispositivos'] = pr.get('dispositivos_descricao')
+                                if not p_det.get('endereco'):
+                                    p_det['endereco'] = pr.get('cliente_endereco')
+                                if 'observacao' not in p_det or p_det.get('observacao') is None:
+                                    p_det['observacao'] = pr.get('pedido_obs') or pr.get('cliente_obs') or ''
+                    item['paradas_detalhes'] = paradas_lista
+                    self.send_json({'rota': item})
+                    return
+
                 c.execute('SELECT * FROM rotas_entrega ORDER BY created_at DESC')
                 rotas = []
                 for row in c.fetchall():
@@ -3301,6 +3363,71 @@ O Cedente acima qualificado declara sob as penas da lei (Art. 180 e Art. 299 do 
                     'success': True,
                     'id': rota_id,
                     'message': 'Rota salva no histórico com sucesso!'
+                })
+                return
+
+            # 16b. Atualizar Observação / Status de Parada na Rota do Entregador
+            if path == '/api/rotas/observacao':
+                rota_id = data.get('rota_id') or data.get('id')
+                parada_idx = data.get('parada_index') if data.get('parada_index') is not None else data.get('indice')
+                pedido_id = data.get('pedido_id')
+                nova_obs = data.get('observacao')
+                novo_status_parada = data.get('status_parada')
+
+                if not rota_id:
+                    self.send_json({'error': 'ID da rota não informado.'}, 400)
+                    return
+
+                c.execute('SELECT * FROM rotas_entrega WHERE id = ?', (rota_id,))
+                row = c.fetchone()
+                if not row:
+                    try:
+                        sync_pull_from_supabase('rotas_entrega')
+                    except Exception:
+                        pass
+                    c.execute('SELECT * FROM rotas_entrega WHERE id = ?', (rota_id,))
+                    row = c.fetchone()
+
+                if not row:
+                    self.send_json({'error': 'Rota não encontrada.'}, 404)
+                    return
+
+                item = dict(row)
+                try:
+                    paradas_lista = json.loads(item.get('paradas_detalhes') or '[]') if isinstance(item.get('paradas_detalhes'), str) else (item.get('paradas_detalhes') or [])
+                except Exception:
+                    paradas_lista = []
+
+                target = None
+                if parada_idx is not None and isinstance(parada_idx, int) and 0 <= parada_idx < len(paradas_lista):
+                    target = paradas_lista[parada_idx]
+                elif pedido_id:
+                    for p_det in paradas_lista:
+                        if isinstance(p_det, dict) and p_det.get('pedido_id') == pedido_id:
+                            target = p_det
+                            break
+
+                if target is not None and isinstance(target, dict):
+                    if nova_obs is not None:
+                        target['observacao'] = str(nova_obs).strip()
+                    if novo_status_parada is not None:
+                        target['status_parada'] = str(novo_status_parada).strip()
+
+                paradas_json = json.dumps(paradas_lista, ensure_ascii=False)
+                c.execute('UPDATE rotas_entrega SET paradas_detalhes = ? WHERE id = ?', (paradas_json, rota_id))
+                c.execute('SELECT * FROM rotas_entrega WHERE id = ?', (rota_id,))
+                updated_row = c.fetchone()
+                conn.commit()
+                conn.close()
+                conn = None
+
+                if updated_row:
+                    sync_upsert_supabase('rotas_entrega', dict(updated_row))
+
+                self.send_json({
+                    'success': True,
+                    'paradas_detalhes': paradas_lista,
+                    'message': 'Observação da parada atualizada com sucesso!'
                 })
                 return
 
