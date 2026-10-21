@@ -31,6 +31,16 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Custom CSS Dribbble-inspired -->
     <link rel="stylesheet" href="style.css?v=3">
+    <!-- Proteção de Acesso (Redirecionamento Imediato para Login) -->
+    <script>
+        (function() {
+            const token = localStorage.getItem('leao_auth_token');
+            const hasCookie = document.cookie.split(';').some(c => c.trim().startsWith('leao_session='));
+            if (!token && !hasCookie) {
+                window.location.replace('/login.html');
+            }
+        })();
+    </script>
 </head>
 <body class="bg-[#f6f7fa] text-[#121316] min-h-screen flex antialiased">
 
@@ -118,14 +128,16 @@
         </div>
 
         <!-- Card de Perfil no Rodapé da Sidebar -->
-        <div class="pt-3 border-t border-slate-800/80">
+        <div class="pt-3 border-t border-slate-800/80 space-y-1.5">
             <div class="flex items-center gap-2.5 p-2 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors cursor-pointer" onclick="switchTab('dashboard')">
                 <img src="leao.jpg" class="w-8 h-8 rounded-xl object-cover shrink-0">
                 <div class="overflow-hidden flex-1">
-                    <h5 class="text-[11px] font-bold text-white truncate">Loja Apple</h5>
+                    <h5 id="sidebar-user-name" class="text-[11px] font-bold text-white truncate">Administrador</h5>
                     <p class="text-[10px] text-slate-400 truncate">Vendas & Estoque</p>
                 </div>
-                <i class="fa-solid fa-chevron-right text-[10px] text-slate-500"></i>
+                <button type="button" onclick="event.stopPropagation(); realizarLogout();" title="Sair do Sistema" class="w-7 h-7 rounded-xl bg-white/5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center transition-colors shrink-0">
+                    <i class="fa-solid fa-right-from-bracket text-[11px]"></i>
+                </button>
             </div>
         </div>
     </aside>
@@ -168,6 +180,12 @@
                 <button onclick="openModalCadastroAparelho()" class="btn-pill-secondary">
                     <i class="fa-solid fa-plus text-slate-500"></i>
                     <span class="hidden sm:inline">Novo Aparelho</span>
+                </button>
+
+                <!-- Botão Sair (Logout) -->
+                <button onclick="realizarLogout()" title="Sair do Sistema" class="btn-pill-secondary text-slate-500 hover:text-rose-600 px-3">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span class="hidden xl:inline">Sair</span>
                 </button>
             </div>
         </header>

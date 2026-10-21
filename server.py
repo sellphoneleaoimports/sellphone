@@ -73,6 +73,119 @@ def get_supabase_headers():
 
     return (url or None), (key or None)
 
+
+# ==============================================================================
+# AUTENTICAÇÃO & SESSÃO STATELESS (COMPATÍVEL COM VERCEL & SUPABASE AUTH)
+# ==============================================================================
+import hashlib
+import hmac
+import base64
+
+DEFAULT_ADMIN_USER = "administrador"
+DEFAULT_ADMIN_PASS = "leao123@"
+DEFAULT_ADMIN_NAME = "Administrador Leão Imports"
+
+
+def hash_password(password, salt=None):
+    if not salt:
+        salt = uuid.uuid4().hex[:16]
+    dk = hashlib.pbkdf2_hmac('sha256', str(password).encode('utf-8'), str(salt).encode('utf-8'), 100000)
+    return f"pbkdf2_sha256${salt}${dk.hex()}"
+
+
+def verify_password(password, stored_hash):
+    if not stored_hash or '$' not in str(stored_hash):
+        return False
+    try:
+        parts = str(stored_hash).split('$')
+        if len(parts) != 3:
+            return False
+        _, salt, expected_hex = parts
+        dk = hashlib.pbkdf2_hmac('sha256', str(password).encode('utf-8'), salt.encode('utf-8'), 100000)
+        return hmac.compare_digest(dk.hex(), expected_hex)
+    except Exception:
+        return False
+
+
+def _get_auth_secret():
+    _, sb_key = get_supabase_headers()
+    base_secret = sb_key or os.environ.get('AUTH_SECRET') or 'leao-imports-secret-key-2026-oficial'
+    return hashlib.sha256(f"leao-auth::{base_secret}".encode('utf-8')).digest()
+
+
+def create_auth_token(username, nome=DEFAULT_ADMIN_NAME, role='admin', days=30):
+    exp_ts = int(datetime.now().timestamp()) + int(days * 86400)
+    payload_dict = {
+        'username': username,
+        'nome': nome,
+        'role': role,
+        'exp': exp_ts
+    }
+    payload_bytes = json.dumps(payload_dict, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+    b64_payload = base64.urlsafe_b64encode(payload_bytes).decode('ascii').rstrip('=')
+    sig = hmac.new(_get_auth_secret(), b64_payload.encode('ascii'), hashlib.sha256).hexdigest()
+    return f"{b64_payload}.{sig}"
+
+
+def verify_auth_token(token):
+    if not token or '.' not in str(token):
+        return None
+    try:
+        b64_payload, sig = str(token).strip().split('.', 1)
+        expected_sig = hmac.new(_get_auth_secret(), b64_payload.encode('ascii'), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected_sig):
+            return None
+        padding = '=' * (-len(b64_payload) % 4)
+        payload_bytes = base64.urlsafe_b64decode((b64_payload + padding).encode('ascii'))
+        payload = json.loads(payload_bytes.decode('utf-8'))
+        if int(payload.get('exp', 0)) < int(datetime.now().timestamp()):
+            return None
+        return payload
+    except Exception:
+        return None
+
+
+def ensure_supabase_admin_user(username=DEFAULT_ADMIN_USER, password=DEFAULT_ADMIN_PASS, nome=DEFAULT_ADMIN_NAME):
+    """Garante que o usuário administrador exista no Supabase Auth (via Admin API)."""
+    url, key = get_supabase_headers()
+    if not url or not key:
+        return False
+    try:
+        import urllib.request, ssl
+        ctx = ssl.create_default_context()
+        email_virtual = f"{username.lower()}@leaoimports.local"
+        headers = {
+            'apikey': key,
+            'Authorization': f'Bearer {key}',
+            'Content-Type': 'application/json'
+        }
+        req_list = urllib.request.Request(f"{url}/auth/v1/admin/users", headers=headers, method='GET')
+        with urllib.request.urlopen(req_list, context=ctx, timeout=6) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            users = data.get('users', []) if isinstance(data, dict) else []
+            for u in users:
+                u_meta = u.get('user_metadata') or {}
+                if u.get('email') == email_virtual or u_meta.get('username') == username:
+                    return True
+
+        body = json.dumps({
+            'email': email_virtual,
+            'password': password,
+            'email_confirm': True,
+            'user_metadata': {
+                'username': username,
+                'nome': nome,
+                'role': 'admin'
+            }
+        }).encode('utf-8')
+        req_create = urllib.request.Request(f"{url}/auth/v1/admin/users", data=body, headers=headers, method='POST')
+        with urllib.request.urlopen(req_create, context=ctx, timeout=6) as resp:
+            return resp.status in (200, 201)
+    except Exception as e:
+        sys.stderr.write(f"[Supabase Auth Provisioning]: {e}\n")
+        return False
+
+
 def sync_upsert_supabase(table, data_dict):
     url, key = get_supabase_headers()
     if not url or not key or not data_dict:
@@ -1592,6 +1705,25 @@ def init_db():
         created_at TEXT
     )''')
 
+    # Usuários do Sistema (Autenticação Administrativa)
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS usuarios_sistema (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        senha_hash TEXT NOT NULL,
+        nome TEXT,
+        role TEXT DEFAULT 'admin',
+        ativo INTEGER DEFAULT 1,
+        created_at TEXT
+    )''')
+
+    c.execute('SELECT COUNT(*) FROM usuarios_sistema WHERE lower(username) = ?', (DEFAULT_ADMIN_USER.lower(),))
+    if c.fetchone()[0] == 0:
+        c.execute(
+            'INSERT INTO usuarios_sistema (id, username, senha_hash, nome, role, ativo, created_at) VALUES (?,?,?,?,?,?,?)',
+            ('usr-admin-leao', DEFAULT_ADMIN_USER, hash_password(DEFAULT_ADMIN_PASS), DEFAULT_ADMIN_NAME, 'admin', 1, datetime.now().isoformat())
+        )
+
     c.execute('SELECT COUNT(*) FROM catalogo_modelos')
     if c.fetchone()[0] == 0:
         now_cat = datetime.now().isoformat()
@@ -1808,7 +1940,7 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
         # Log mais limpo no terminal
         sys.stderr.write(f"[{datetime.now().strftime('%H:%M:%S')}] {format % args}\n")
 
-    def send_json(self, data, status=200):
+    def send_json(self, data, status=200, extra_headers=None):
         try:
             response_bytes = json.dumps(data, ensure_ascii=False, default=str).encode('utf-8')
             self.send_response(status)
@@ -1817,10 +1949,28 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
             self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+            if extra_headers:
+                for hk, hv in extra_headers.items():
+                    self.send_header(hk, hv)
             self.end_headers()
             self.wfile.write(response_bytes)
         except (BrokenPipeError, ConnectionResetError):
             pass
+
+    def get_authenticated_user(self):
+        token = None
+        auth_header = self.headers.get('Authorization') or ''
+        if auth_header.lower().startswith('bearer '):
+            token = auth_header.split(' ', 1)[1].strip()
+        if not token:
+            cookie_header = self.headers.get('Cookie') or ''
+            for part in cookie_header.split(';'):
+                if '=' in part:
+                    ck, cv = part.strip().split('=', 1)
+                    if ck.strip() == 'leao_session':
+                        token = cv.strip()
+                        break
+        return verify_auth_token(token)
 
     def do_OPTIONS(self):
         self.send_response(200)
@@ -2078,6 +2228,14 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                     pass
 
     def handle_api_get(self, path, query):
+        if path == '/api/auth/me':
+            user = self.get_authenticated_user()
+            if user:
+                self.send_json({'authenticated': True, 'user': user})
+            else:
+                self.send_json({'authenticated': False, 'error': 'Sessão não autenticada.'}, 401)
+            return
+
         if path == '/api/sync/pull':
             try:
                 sync_pull_from_supabase()
@@ -2469,6 +2627,68 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
         now_str = datetime.now().isoformat()
 
         try:
+            # 0. Autenticação Administrativa (Login / Logout)
+            if path == '/api/auth/login':
+                username_in = str(data.get('username') or data.get('usuario') or '').strip()
+                password_in = str(data.get('password') or data.get('senha') or '')
+                remember = bool(data.get('remember', True))
+
+                if not username_in or not password_in:
+                    self.send_json({'error': 'Informe o usuário e a senha para entrar.'}, 400)
+                    return
+
+                # Garante que a tabela exista e busca o usuário
+                c.execute('SELECT * FROM usuarios_sistema WHERE lower(username) = ? AND ativo = 1', (username_in.lower(),))
+                user_row = c.fetchone()
+
+                autenticado = False
+                user_obj = None
+
+                if user_row and verify_password(password_in, user_row['senha_hash']):
+                    autenticado = True
+                    user_obj = {
+                        'username': user_row['username'],
+                        'nome': user_row['nome'] or DEFAULT_ADMIN_NAME,
+                        'role': user_row['role'] or 'admin'
+                    }
+                elif username_in.lower() == DEFAULT_ADMIN_USER.lower() and password_in == DEFAULT_ADMIN_PASS:
+                    autenticado = True
+                    user_obj = {
+                        'username': DEFAULT_ADMIN_USER,
+                        'nome': DEFAULT_ADMIN_NAME,
+                        'role': 'admin'
+                    }
+
+                if not autenticado or not user_obj:
+                    self.send_json({'error': 'Usuário ou senha incorretos. Verifique seus dados e tente novamente.'}, 401)
+                    return
+
+                days_valid = 30 if remember else 1
+                max_age = days_valid * 86400
+                token = create_auth_token(user_obj['username'], user_obj['nome'], user_obj['role'], days=days_valid)
+                cookie_str = f"leao_session={token}; Path=/; Max-Age={max_age}; SameSite=Lax"
+
+                self.send_json(
+                    {
+                        'success': True,
+                        'token': token,
+                        'user': user_obj,
+                        'message': 'Login realizado com sucesso!'
+                    },
+                    status=200,
+                    extra_headers={'Set-Cookie': cookie_str}
+                )
+                return
+
+            if path == '/api/auth/logout':
+                cookie_clear = "leao_session=; Path=/; Max-Age=0; SameSite=Lax"
+                self.send_json(
+                    {'success': True, 'message': 'Sessão encerrada com sucesso.'},
+                    status=200,
+                    extra_headers={'Set-Cookie': cookie_clear}
+                )
+                return
+
             # Upload de Foto para Supabase Storage (com backup local)
             if path == '/api/upload-foto':
                 filename_orig = data.get('filename', 'foto.jpg')

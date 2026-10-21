@@ -41,14 +41,61 @@ const AppState = {
 };
 
 // ==============================================================================
-// INICIALIZAÇÃO
+// INICIALIZAÇÃO & AUTENTICAÇÃO
 // ==============================================================================
 document.addEventListener('DOMContentLoaded', async () => {
+    const authOk = await checkAuthSession();
+    if (!authOk) return;
     initKeyboardShortcuts();
     initDropzoneFotos();
     await checkSupabaseConfig();
     await loadAllData();
 });
+
+async function checkAuthSession() {
+    const token = localStorage.getItem('leao_auth_token') || '';
+    try {
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const resp = await fetch('/api/auth/me', { headers });
+        if (!resp.ok) {
+            localStorage.removeItem('leao_auth_token');
+            localStorage.removeItem('leao_auth_user');
+            window.location.replace('/login.html');
+            return false;
+        }
+        const data = await resp.json();
+        if (!data || !data.authenticated) {
+            window.location.replace('/login.html');
+            return false;
+        }
+        if (data.user) {
+            localStorage.setItem('leao_auth_user', JSON.stringify(data.user));
+            const elName = document.getElementById('sidebar-user-name');
+            if (elName && data.user.username) {
+                elName.innerText = data.user.username === 'administrador' ? 'Administrador' : data.user.username;
+            }
+        }
+        return true;
+    } catch (err) {
+        console.warn('Falha ao verificar sessão:', err);
+        if (!token) {
+            window.location.replace('/login.html');
+            return false;
+        }
+        return true;
+    }
+}
+
+async function realizarLogout() {
+    if (!confirm('Deseja realmente sair do painel administrativo da Leão Imports?')) return;
+    try {
+        await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (_) {}
+    localStorage.removeItem('leao_auth_token');
+    localStorage.removeItem('leao_auth_user');
+    document.cookie = 'leao_session=; Path=/; Max-Age=0; SameSite=Lax';
+    window.location.replace('/login.html');
+}
 
 function initKeyboardShortcuts() {
     window.addEventListener('keydown', (e) => {
