@@ -1204,7 +1204,7 @@ def consultar_historico_imei_loja(conn, valor_limpo, ignorar_disp_id=None):
         'registros_estoque': [],
         'registros_vendas': [],
         'registros_tradein': [],
-        'resumo_alerta': 'Novo na loja: este IMEI/Serial ainda não consta em nenhum registro anterior da iLion Store.'
+        'resumo_alerta': 'Novo na loja: este IMEI/Serial ainda não consta em nenhum registro anterior da Leão Imports.'
     }
     if not valor_limpo:
         return resultado

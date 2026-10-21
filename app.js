@@ -1113,7 +1113,7 @@ function renderClientes(termo) {
         const telFormatado = c.telefone_whatsapp || 'Sem telefone';
         const telLimpo = limparTelefone(c.telefone_whatsapp || '');
         const dataFormatada = c.created_at ? formatData(c.created_at) : 'Recente';
-        const msgWhats = encodeURIComponent(`Olá, ${c.nome}! Aqui é da iLion Apple Specialist. Como você está?`);
+        const msgWhats = encodeURIComponent(`Olá, ${c.nome}! Aqui é da Leão Imports. Como você está?`);
         const nomeSafe = (c.nome || 'Cliente').replace(/'/g, "\\'");
 
         return `
@@ -1619,7 +1619,7 @@ async function executarConsultaIMEIPainel(valor, ignorarDispId, painelEl, inputI
             `;
         }
 
-        // Histórico interno na iLion Store
+        // Histórico interno na Leão Imports
         if (hist.ja_cadastrado || hist.ja_vendido_pela_loja || hist.ja_entrou_em_tradein) {
             html += `
                 <div class="p-2 rounded-lg bg-amber-100/80 border border-amber-300 text-amber-950 text-[11px] font-semibold">
@@ -1629,7 +1629,7 @@ async function executarConsultaIMEIPainel(valor, ignorarDispId, painelEl, inputI
         } else {
             html += `
                 <div class="text-[11px] text-emerald-800 font-medium">
-                    <i class="fa-solid fa-database mr-1 text-emerald-600"></i><strong>Banco da Loja:</strong> Sem duplicidade (nunca cadastrado ou vendido antes na iLion Store).
+                    <i class="fa-solid fa-database mr-1 text-emerald-600"></i><strong>Banco da Loja:</strong> Sem duplicidade (nunca cadastrado ou vendido antes na Leão Imports).
                 </div>
             `;
         }
@@ -2145,7 +2145,7 @@ function renderConteudoDocumento() {
     const btnWhats = document.getElementById('btn-whatsapp-doc');
     if (btnWhats) {
         btnWhats.onclick = () => {
-            const mensagem = `Olá, *${p.cliente_nome}*! 👋🦁\n\nAqui é da *iLion Apple Specialist*!\n\n📋 *Pedido:* ${p.numero_pedido}\n📱 *Aparelho:* ${p.dispositivos_descricao}\n💰 *Total Pago:* ${formatMoeda(p.valor_total_liquido)}\n🛡️ *Garantia Especialista:* Válida até *${garantiaAteFormatada}* (${p.meses_garantia * 30} dias balcão)\n\nQualquer dúvida, estamos à disposição! 🚀`;
+            const mensagem = `Olá, *${p.cliente_nome}*! 👋🦁\n\nAqui é da *Leão Imports*!\n\n📋 *Pedido:* ${p.numero_pedido}\n📱 *Aparelho:* ${p.dispositivos_descricao}\n💰 *Total Pago:* ${formatMoeda(p.valor_total_liquido)}\n🛡️ *Garantia Especialista:* Válida até *${garantiaAteFormatada}* (${p.meses_garantia * 30} dias balcão)\n\nQualquer dúvida, estamos à disposição! 🚀`;
             window.open(`https://wa.me/${limparTelefone(p.telefone_whatsapp)}?text=${encodeURIComponent(mensagem)}`, '_blank');
         };
     }
@@ -2156,7 +2156,7 @@ function renderConteudoDocumento() {
                 <div class="flex items-center gap-3">
                     <img src="leao.jpg" class="w-12 h-12 rounded-xl object-cover">
                     <div>
-                        <h3 class="text-lg font-black text-slate-900">iLion Apple Specialist</h3>
+                        <h3 class="text-lg font-black text-slate-900">Leão Imports</h3>
                         <p class="text-[11px] text-slate-500">iPhones, MacBooks e Acessórios Originais</p>
                     </div>
                 </div>
@@ -2215,7 +2215,7 @@ function renderConteudoDocumento() {
                 <img src="leao.jpg" class="w-10 h-10 rounded-xl object-cover">
                 <div>
                     <h4 class="font-black text-slate-900">CERTIFICADO DE GARANTIA ESPECIALISTA APPLE</h4>
-                    <p class="text-[11px] text-slate-500">iLion Store &bull; Pedido ${p.numero_pedido}</p>
+                    <p class="text-[11px] text-slate-500">Leão Imports &bull; Pedido ${p.numero_pedido}</p>
                 </div>
             </div>
             <div class="space-y-3 text-xs text-slate-700 leading-relaxed text-justify">
@@ -2520,22 +2520,22 @@ function enviarWhatsAppMatchPorId(encId) {
     const e = AppState.encomendas.find(item => item.id === encId);
     if (!e) return;
     const preco = e.disp_preco ? formatMoeda(e.disp_preco) : (e.orcamento_maximo ? formatMoeda(e.orcamento_maximo) : 'ótimo preço');
-    const msg = `Olá, *${e.cliente_nome}*! 👋🦁 Aqui é da *iLion Apple Specialist*.\n\nLembra que você estava procurando um *${e.modelo_desejado}*? 📱✨\n\nAcabou de chegar uma unidade revisada no nosso estoque por *${preco}*!\n\nQuer que eu separe para você?`;
+    const msg = `Olá, *${e.cliente_nome}*! 👋🦁 Aqui é da *Leão Imports*.\n\nLembra que você estava procurando um *${e.modelo_desejado}*? 📱✨\n\nAcabou de chegar uma unidade revisada no nosso estoque por *${preco}*!\n\nQuer que eu separe para você?`;
     window.open(`https://wa.me/${limparTelefone(e.telefone_whatsapp)}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 function enviarWhatsAppMatch(telefone, nome, modelo, preco) {
-    const msg = `Olá, *${nome}*! 👋🦁 Aqui é da *iLion Apple Specialist*.\n\nLembra que você estava procurando um *${modelo}*? 📱✨\n\nAcabou de chegar uma unidade revisada no nosso estoque por *${preco}*!\n\nQuer que eu separe para você?`;
+    const msg = `Olá, *${nome}*! 👋🦁 Aqui é da *Leão Imports*.\n\nLembra que você estava procurando um *${modelo}*? 📱✨\n\nAcabou de chegar uma unidade revisada no nosso estoque por *${preco}*!\n\nQuer que eu separe para você?`;
     window.open(`https://wa.me/${limparTelefone(telefone)}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 function enviarWhatsAppGarantia(telefone, nome, aparelho) {
-    const msg = `Olá, *${nome}*! 👋🦁 Aqui é da equipe de pós-venda da *iLion Apple Specialist*.\n\nPassando para saber como está sua experiência com o seu *${aparelho}*! A sua garantia balcão está próxima do término e queríamos confirmar se está tudo 100% perfeito. Conte conosco!`;
+    const msg = `Olá, *${nome}*! 👋🦁 Aqui é da equipe de pós-venda da *Leão Imports*.\n\nPassando para saber como está sua experiência com o seu *${aparelho}*! A sua garantia balcão está próxima do término e queríamos confirmar se está tudo 100% perfeito. Conte conosco!`;
     window.open(`https://wa.me/${limparTelefone(telefone)}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 function enviarWhatsAppUpgrade(telefone, nome, aparelho) {
-    const msg = `Olá, *${nome}*! Tudo bem? 🦁✨\n\nVimos que você está usando o seu *${aparelho}* há quase um ano! A iLion preparou uma condição especial de *Trade-In VIP*: você entrega seu aparelho pelo melhor valor de avaliação e sai com o modelo mais recente da Apple!\n\nPodemos fazer uma simulação rápida sem compromisso? 📱🚀`;
+    const msg = `Olá, *${nome}*! Tudo bem? 🦁✨\n\nVimos que você está usando o seu *${aparelho}* há quase um ano! A Leão Imports preparou uma condição especial de *Trade-In VIP*: você entrega seu aparelho pelo melhor valor de avaliação e sai com o modelo mais recente da Apple!\n\nPodemos fazer uma simulação rápida sem compromisso? 📱🚀`;
     window.open(`https://wa.me/${limparTelefone(telefone)}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
@@ -2548,7 +2548,7 @@ function enviarWhatsAppLead(telefone, nome, interesse) {
         abrirModalConversaWhatsAppCRM(lead.id);
         return;
     }
-    const msg = `Olá, *${nome}*! Tudo bem? 🦁 Aqui é da *iLion Apple Specialist*. Vi que você tem interesse no *${interesse || 'iPhone'}*. Como posso te ajudar hoje?`;
+    const msg = `Olá, *${nome}*! Tudo bem? 🦁 Aqui é da *Leão Imports*. Vi que você tem interesse no *${interesse || 'iPhone'}*. Como posso te ajudar hoje?`;
     window.open(`https://wa.me/${limparTelefone(telefone)}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
@@ -3521,7 +3521,7 @@ function gerarTextoMensagemZap(disp) {
     const interesse = ctx.interesse || 'aparelho Apple';
 
     if (!disp) {
-        textarea.value = `Olá, *${nome}*! Tudo bem? 🦁\n\nAqui é da *iLion Apple Specialist*.\nVi que você tem interesse no *${interesse}*. Como posso te ajudar hoje?`;
+        textarea.value = `Olá, *${nome}*! Tudo bem? 🦁\n\nAqui é da *Leão Imports*.\nVi que você tem interesse no *${interesse}*. Como posso te ajudar hoje?`;
         return;
     }
 
@@ -3531,7 +3531,7 @@ function gerarTextoMensagemZap(disp) {
         textoFotos = `\n\n📸 *Confira as fotos reais do aparelho em alta resolução:*\n` + fotos.map((u, i) => `${i + 1}️⃣ ${u}`).join('\n');
     }
 
-    textarea.value = `Olá, *${nome}*! Tudo bem? 🦁\n\nAqui é da *iLion Apple Specialist*.\nSeparei para você os detalhes e fotos reais do *${disp.modelo}* que temos disponível:\n\n📱 *${disp.modelo}* (${disp.capacidade} • ${disp.cor})\n🔋 Saúde da bateria: *${disp.saude_bateria || 100}%*\n✨ Condição estética: *${disp.condicao_grau || 'Excelente'}*\n💰 Valor especial: *${formatMoeda(disp.preco_sugerido)}*${textoFotos}\n\nO aparelho está 100% testado, higienizado e à pronta entrega com garantia balcão.\nFicou com alguma dúvida ou gostaria de reservar?`;
+    textarea.value = `Olá, *${nome}*! Tudo bem? 🦁\n\nAqui é da *Leão Imports*.\nSeparei para você os detalhes e fotos reais do *${disp.modelo}* que temos disponível:\n\n📱 *${disp.modelo}* (${disp.capacidade} • ${disp.cor})\n🔋 Saúde da bateria: *${disp.saude_bateria || 100}%*\n✨ Condição estética: *${disp.condicao_grau || 'Excelente'}*\n💰 Valor especial: *${formatMoeda(disp.preco_sugerido)}*${textoFotos}\n\nO aparelho está 100% testado, higienizado e à pronta entrega com garantia balcão.\nFicou com alguma dúvida ou gostaria de reservar?`;
 }
 
 async function copiarFotoUrlParaClipboard(url) {
@@ -4713,7 +4713,7 @@ function renderRoteiroSequencia() {
             <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
                     <span class="font-bold text-xs text-yellow-400">SAÍDA &bull; Ponto 0</span>
-                    <span class="text-[10px] text-slate-400 font-mono">Loja iLion Store</span>
+                    <span class="text-[10px] text-slate-400 font-mono">Loja Leão Imports</span>
                 </div>
                 <p class="text-xs text-slate-200 truncate font-medium">${origem || 'Endereço da Loja'}</p>
                 ${origemEncontrada ? `<p class="text-[10px] text-emerald-400 truncate mt-0.5"><i class="fa-solid fa-circle-check mr-1"></i>GPS: ${origemEncontrada}</p>` : ''}
@@ -4910,7 +4910,7 @@ function abrirAvisoWhatsAppEntrega(pedidoId) {
     const aparelhoDesc = pedido.dispositivos_descricao || 'seu novo aparelho';
     const endereco = obterEnderecoCliente(pedido) || 'endereço combinado';
 
-    const texto = `Olá, *${clienteNome}*! Tudo bem? Aqui é da iLion Store. 🛵✨\n\nSeu pedido (*${aparelhoDesc}*) já saiu para entrega no seguinte endereço:\n📍 *${endereco}*\n\nNosso entregador já está a caminho! Por favor, certifique-se de que haverá alguém para receber o produto e conferir com o termo de entrega.\n\nQualquer dúvida estamos à disposição por aqui!`;
+    const texto = `Olá, *${clienteNome}*! Tudo bem? Aqui é da Leão Imports. 🛵✨\n\nSeu pedido (*${aparelhoDesc}*) já saiu para entrega no seguinte endereço:\n📍 *${endereco}*\n\nNosso entregador já está a caminho! Por favor, certifique-se de que haverá alguém para receber o produto e conferir com o termo de entrega.\n\nQualquer dúvida estamos à disposição por aqui!`;
 
     const url = `https://wa.me/${foneFormatado}?text=${encodeURIComponent(texto)}`;
     window.open(url, '_blank');
@@ -5033,7 +5033,7 @@ function imprimirRoteiroEntregas() {
             <div class="flex items-center gap-3">
                 <img src="leao.jpg" class="w-12 h-12 rounded-xl object-cover">
                 <div>
-                    <h2 class="text-base font-black text-slate-900 uppercase tracking-tight">iLion Apple Specialist &bull; Logística de Entregas</h2>
+                    <h2 class="text-base font-black text-slate-900 uppercase tracking-tight">Leão Imports &bull; Logística de Entregas</h2>
                     <p class="text-xs text-slate-600 font-medium">Manifesto de Despacho &bull; Guia de Entrega ao Cliente</p>
                 </div>
             </div>
@@ -5122,7 +5122,7 @@ function imprimirRoteiroEntregas() {
 
         <!-- Rodapé do Manifesto -->
         <div class="border-t border-slate-200 pt-3 flex items-center justify-between text-[10px] text-slate-400">
-            <span>iLion Apple Specialist &bull; Todos os aparelhos conferidos e revisados</span>
+            <span>Leão Imports &bull; Todos os aparelhos conferidos e revisados</span>
             <span>Documento emitido internamente para controle logístico</span>
         </div>
     `;
