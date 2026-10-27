@@ -186,6 +186,73 @@ def ensure_supabase_admin_user(username=DEFAULT_ADMIN_USER, password=DEFAULT_ADM
         return False
 
 
+def sync_fornecedores_to_supabase_cloud(lista_fornecedores):
+    """Persiste o catálogo de fornecedores na nuvem Supabase (user_metadata do admin) sem exigir nova tabela SQL."""
+    url, key = get_supabase_headers()
+    if not url or not key or not isinstance(lista_fornecedores, list):
+        return False
+    try:
+        import urllib.request, ssl
+        ctx = ssl.create_default_context()
+        email_virtual = f"{DEFAULT_ADMIN_USER.lower()}@leaoimports.local"
+        headers = {
+            'apikey': key,
+            'Authorization': f'Bearer {key}',
+            'Content-Type': 'application/json'
+        }
+        req_list = urllib.request.Request(f"{url}/auth/v1/admin/users", headers=headers, method='GET')
+        target_user = None
+        with urllib.request.urlopen(req_list, context=ctx, timeout=5) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            users = data.get('users', []) if isinstance(data, dict) else []
+            for u in users:
+                u_meta = u.get('user_metadata') or {}
+                if u.get('email') == email_virtual or u_meta.get('username') == DEFAULT_ADMIN_USER:
+                    target_user = u
+                    break
+        if not target_user or not target_user.get('id'):
+            return False
+        user_id = target_user['id']
+        meta = dict(target_user.get('user_metadata') or {})
+        meta['fornecedores_catalogo'] = lista_fornecedores
+        body = json.dumps({'user_metadata': meta}, ensure_ascii=False).encode('utf-8')
+        req_upd = urllib.request.Request(f"{url}/auth/v1/admin/users/{user_id}", data=body, headers=headers, method='PUT')
+        with urllib.request.urlopen(req_upd, context=ctx, timeout=5) as resp:
+            return resp.status in (200, 201)
+    except Exception as e:
+        sys.stderr.write(f"[Supabase Sync Fornecedores Cloud]: {e}\n")
+        return False
+
+
+def pull_fornecedores_from_supabase_cloud():
+    """Recupera o catálogo de fornecedores salvo no Supabase Cloud (user_metadata do admin)."""
+    url, key = get_supabase_headers()
+    if not url or not key:
+        return None
+    try:
+        import urllib.request, ssl
+        ctx = ssl.create_default_context()
+        email_virtual = f"{DEFAULT_ADMIN_USER.lower()}@leaoimports.local"
+        headers = {
+            'apikey': key,
+            'Authorization': f'Bearer {key}',
+            'Content-Type': 'application/json'
+        }
+        req_list = urllib.request.Request(f"{url}/auth/v1/admin/users", headers=headers, method='GET')
+        with urllib.request.urlopen(req_list, context=ctx, timeout=5) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            users = data.get('users', []) if isinstance(data, dict) else []
+            for u in users:
+                u_meta = u.get('user_metadata') or {}
+                if u.get('email') == email_virtual or u_meta.get('username') == DEFAULT_ADMIN_USER:
+                    cat = u_meta.get('fornecedores_catalogo')
+                    if isinstance(cat, list):
+                        return cat
+    except Exception:
+        pass
+    return None
+
+
 def sync_upsert_supabase(table, data_dict):
     url, key = get_supabase_headers()
     if not url or not key or not data_dict:
@@ -223,6 +290,12 @@ def sync_upsert_supabase(table, data_dict):
                 clean_data['fotos'] = json.loads(clean_data['fotos'])
             except Exception:
                 clean_data['fotos'] = []
+
+        if 'dados_extras' in clean_data and isinstance(clean_data['dados_extras'], str):
+            try:
+                clean_data['dados_extras'] = json.loads(clean_data['dados_extras'])
+            except Exception:
+                clean_data['dados_extras'] = {}
 
         if table == 'trocas_trade_in' and 'termo_cessao_aceito' in clean_data:
             clean_data['termo_cessao_aceito'] = bool(clean_data['termo_cessao_aceito'])
@@ -358,7 +431,7 @@ def sync_pull_from_supabase(target_table=None):
         tables_to_sync = [target_table]
     else:
         tables_to_sync = [
-            'clientes', 'dispositivos', 'pedidos_venda', 'itens_venda',
+            'clientes', 'fornecedores', 'dispositivos', 'pedidos_venda', 'itens_venda',
             'trocas_trade_in', 'interacoes_crm', 'encomendas_desejos', 'rotas_entrega'
         ]
 
@@ -428,6 +501,8 @@ def sync_pull_from_supabase(target_table=None):
                         clean_row['pedidos_ids'] = json.dumps(clean_row['pedidos_ids'])
                     if 'paradas_detalhes' in clean_row and isinstance(clean_row['paradas_detalhes'], (dict, list)):
                         clean_row['paradas_detalhes'] = json.dumps(clean_row['paradas_detalhes'])
+                    if 'dados_extras' in clean_row and isinstance(clean_row['dados_extras'], (dict, list)):
+                        clean_row['dados_extras'] = json.dumps(clean_row['dados_extras'])
                     cols = list(clean_row.keys())
                     if not cols:
                         continue
@@ -1705,6 +1780,37 @@ def init_db():
         created_at TEXT
     )''')
 
+    # Catálogo de Fornecedores (Controle de Compras, Volume e Negociação)
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS fornecedores (
+        id TEXT PRIMARY KEY,
+        nome TEXT NOT NULL UNIQUE,
+        telefone_whatsapp TEXT,
+        cidade_origem TEXT,
+        cnpj_cpf TEXT,
+        email TEXT,
+        chave_pix TEXT,
+        prazo_garantia_padrao TEXT,
+        observacoes TEXT,
+        dados_extras TEXT DEFAULT '{}',
+        created_at TEXT,
+        updated_at TEXT
+    )''')
+
+    # Garantir novas colunas na tabela fornecedores caso já exista no banco local
+    for col_f, tipo_f in [
+        ('cnpj_cpf', 'TEXT'),
+        ('email', 'TEXT'),
+        ('chave_pix', 'TEXT'),
+        ('prazo_garantia_padrao', 'TEXT'),
+        ('dados_extras', "TEXT DEFAULT '{}'"),
+        ('updated_at', 'TEXT')
+    ]:
+        try:
+            c.execute(f"ALTER TABLE fornecedores ADD COLUMN {col_f} {tipo_f}")
+        except Exception:
+            pass
+
     # Usuários do Sistema (Autenticação Administrativa)
     c.execute('''
     CREATE TABLE IF NOT EXISTS usuarios_sistema (
@@ -1724,80 +1830,90 @@ def init_db():
             ('usr-admin-leao', DEFAULT_ADMIN_USER, hash_password(DEFAULT_ADMIN_PASS), DEFAULT_ADMIN_NAME, 'admin', 1, datetime.now().isoformat())
         )
 
-    c.execute('SELECT COUNT(*) FROM catalogo_modelos')
-    if c.fetchone()[0] == 0:
-        now_cat = datetime.now().isoformat()
-        modelos_base = [
-            # iPhones
-            ('iPhone 11', 'iPhone'),
-            ('iPhone 11 Pro', 'iPhone'),
-            ('iPhone 11 Pro Max', 'iPhone'),
-            ('iPhone 12', 'iPhone'),
-            ('iPhone 12 mini', 'iPhone'),
-            ('iPhone 12 Pro', 'iPhone'),
-            ('iPhone 12 Pro Max', 'iPhone'),
-            ('iPhone 13', 'iPhone'),
-            ('iPhone 13 mini', 'iPhone'),
-            ('iPhone 13 Pro', 'iPhone'),
-            ('iPhone 13 Pro Max', 'iPhone'),
-            ('iPhone 14', 'iPhone'),
-            ('iPhone 14 Plus', 'iPhone'),
-            ('iPhone 14 Pro', 'iPhone'),
-            ('iPhone 14 Pro Max', 'iPhone'),
-            ('iPhone 15', 'iPhone'),
-            ('iPhone 15 Plus', 'iPhone'),
-            ('iPhone 15 Pro', 'iPhone'),
-            ('iPhone 15 Pro Max', 'iPhone'),
-            ('iPhone 16', 'iPhone'),
-            ('iPhone 16 Plus', 'iPhone'),
-            ('iPhone 16 Pro', 'iPhone'),
-            ('iPhone 16 Pro Max', 'iPhone'),
-            ('iPhone 17 Pro', 'iPhone'),
-            # MacBooks
-            ('MacBook Air M1', 'MacBook'),
-            ('MacBook Air M2', 'MacBook'),
-            ('MacBook Air M3', 'MacBook'),
-            ('MacBook Pro M1', 'MacBook'),
-            ('MacBook Pro M2', 'MacBook'),
-            ('MacBook Pro M3 14"', 'MacBook'),
-            ('MacBook Pro M3 16"', 'MacBook'),
-            ('MacBook Pro M4', 'MacBook'),
-            # iPads
-            ('iPad 9ª Geração', 'iPad'),
-            ('iPad 10ª Geração', 'iPad'),
-            ('iPad mini 6', 'iPad'),
-            ('iPad Air M1', 'iPad'),
-            ('iPad Air M2', 'iPad'),
-            ('iPad Pro 11 M4', 'iPad'),
-            ('iPad Pro 13 M4', 'iPad'),
-            # Apple Watches
-            ('Apple Watch SE 2', 'Apple Watch'),
-            ('Apple Watch Series 8', 'Apple Watch'),
-            ('Apple Watch Series 9', 'Apple Watch'),
-            ('Apple Watch Series 10', 'Apple Watch'),
-            ('Apple Watch Ultra', 'Apple Watch'),
-            ('Apple Watch Ultra 2', 'Apple Watch'),
-            # Acessórios
-            ('AirPods 3', 'Acessório'),
-            ('AirPods Pro 2', 'Acessório'),
-            ('AirPods Max', 'Acessório'),
-            ('Carregador MagSafe', 'Acessório'),
-            ('Apple Pencil USB-C', 'Acessório'),
-            ('Apple Pencil Pro', 'Acessório')
-        ]
-        c.execute('SELECT DISTINCT modelo, tipo FROM dispositivos WHERE modelo IS NOT NULL AND trim(modelo) != ""')
-        for r in c.fetchall():
-            m_nome = r[0].strip()
-            m_tipo = r[1] if r[1] else 'iPhone'
-            if m_nome and not any(mb[0].lower() == m_nome.lower() for mb in modelos_base):
-                modelos_base.append((m_nome, m_tipo))
+    now_cat = datetime.now().isoformat()
+    modelos_base = [
+        # Linha 18
+        ('iPhone 18 Pro Max', 'iPhone'),
+        ('iPhone 18 Pro', 'iPhone'),
+        # Linha 17
+        ('iPhone 17 Pro Max', 'iPhone'),
+        ('iPhone 17 Pro', 'iPhone'),
+        ('iPhone 17', 'iPhone'),
+        # Linha 16
+        ('iPhone 16 Pro Max', 'iPhone'),
+        ('iPhone 16 Pro', 'iPhone'),
+        ('iPhone 16 Plus', 'iPhone'),
+        ('iPhone 16', 'iPhone'),
+        # Linha 15
+        ('iPhone 15 Pro Max', 'iPhone'),
+        ('iPhone 15 Pro', 'iPhone'),
+        ('iPhone 15 Plus', 'iPhone'),
+        ('iPhone 15', 'iPhone'),
+        # Linha 14
+        ('iPhone 14 Pro Max', 'iPhone'),
+        ('iPhone 14 Pro', 'iPhone'),
+        ('iPhone 14 Plus', 'iPhone'),
+        ('iPhone 14', 'iPhone'),
+        # Linha 13
+        ('iPhone 13 Pro Max', 'iPhone'),
+        ('iPhone 13 Pro', 'iPhone'),
+        ('iPhone 13', 'iPhone'),
+        ('iPhone 13 mini', 'iPhone'),
+        # Linha 12
+        ('iPhone 12 Pro Max', 'iPhone'),
+        ('iPhone 12 Pro', 'iPhone'),
+        ('iPhone 12', 'iPhone'),
+        ('iPhone 12 mini', 'iPhone'),
+        # Linha 11 e XR
+        ('iPhone 11 Pro Max', 'iPhone'),
+        ('iPhone 11 Pro', 'iPhone'),
+        ('iPhone 11', 'iPhone'),
+        ('iPhone XR', 'iPhone'),
+        # MacBooks
+        ('MacBook Pro M4', 'MacBook'),
+        ('MacBook Pro M3 16"', 'MacBook'),
+        ('MacBook Pro M3 14"', 'MacBook'),
+        ('MacBook Air M3', 'MacBook'),
+        ('MacBook Pro M2', 'MacBook'),
+        ('MacBook Air M2', 'MacBook'),
+        ('MacBook Pro M1', 'MacBook'),
+        ('MacBook Air M1', 'MacBook'),
+        # iPads
+        ('iPad Pro 13 M4', 'iPad'),
+        ('iPad Pro 11 M4', 'iPad'),
+        ('iPad Air M2', 'iPad'),
+        ('iPad Air M1', 'iPad'),
+        ('iPad mini 6', 'iPad'),
+        ('iPad 10ª Geração', 'iPad'),
+        ('iPad 9ª Geração', 'iPad'),
+        # Apple Watches
+        ('Apple Watch Ultra 2', 'Apple Watch'),
+        ('Apple Watch Ultra', 'Apple Watch'),
+        ('Apple Watch Series 10', 'Apple Watch'),
+        ('Apple Watch Series 9', 'Apple Watch'),
+        ('Apple Watch Series 8', 'Apple Watch'),
+        ('Apple Watch SE 2', 'Apple Watch'),
+        # Acessórios
+        ('AirPods Max', 'Acessório'),
+        ('AirPods Pro 2', 'Acessório'),
+        ('AirPods 3', 'Acessório'),
+        ('Apple Pencil Pro', 'Acessório'),
+        ('Apple Pencil USB-C', 'Acessório'),
+        ('Carregador MagSafe', 'Acessório')
+    ]
+    c.execute('SELECT DISTINCT modelo, tipo FROM dispositivos WHERE modelo IS NOT NULL AND trim(modelo) != ""')
+    for r in c.fetchall():
+        m_nome = r[0].strip()
+        m_tipo = r[1] if r[1] else 'iPhone'
+        if m_nome and not any(mb[0].lower() == m_nome.lower() for mb in modelos_base):
+            modelos_base.append((m_nome, m_tipo))
 
-        for m_nome, m_tipo in modelos_base:
-            m_id = str(uuid.uuid4())
-            try:
-                c.execute('INSERT OR IGNORE INTO catalogo_modelos (id, nome, tipo, created_at) VALUES (?,?,?,?)', (m_id, m_nome, m_tipo, now_cat))
-            except Exception:
-                pass
+    for m_nome, m_tipo in modelos_base:
+        m_id = str(uuid.uuid4())
+        try:
+            c.execute('INSERT OR IGNORE INTO catalogo_modelos (id, nome, tipo, created_at) VALUES (?,?,?,?)', (m_id, m_nome, m_tipo, now_cat))
+        except Exception:
+            pass
     
     # Reconciliação retroativa: se algum cliente já comprou o modelo desejado em venda concluída, marca o desejo como 'Atendido'
     try:
@@ -2416,9 +2532,14 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                     item = dict(row)
                     if item.get('checklist_tecnico'):
                         try:
-                            item['checklist_tecnico'] = json.loads(item['checklist_tecnico'])
+                            item['checklist_tecnico'] = json.loads(item['checklist_tecnico']) if isinstance(item['checklist_tecnico'], str) else item['checklist_tecnico']
                         except Exception:
                             item['checklist_tecnico'] = {}
+                    else:
+                        item['checklist_tecnico'] = {}
+                    chk_dict = item['checklist_tecnico'] if isinstance(item['checklist_tecnico'], dict) else {}
+                    item['numero_serie'] = chk_dict.get('numero_serie') or ''
+                    item['fornecedor'] = chk_dict.get('fornecedor') or ''
                     if item.get('fotos'):
                         try:
                             item['fotos'] = json.loads(item['fotos']) if isinstance(item['fotos'], str) else item['fotos']
@@ -2527,15 +2648,143 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                 gmaps_key = get_google_maps_key()
                 if gmaps_key:
                     config['google_maps_key'] = gmaps_key
+                try:
+                    fornecedores_lista = json.loads(config.get('fornecedores_lista') or '[]')
+                    if not isinstance(fornecedores_lista, list):
+                        fornecedores_lista = []
+                except Exception:
+                    fornecedores_lista = []
+                # Coleta também fornecedores já registrados nos aparelhos do estoque
+                c.execute("SELECT checklist_tecnico, origem FROM dispositivos")
+                for d_row in c.fetchall():
+                    try:
+                        chk_f = json.loads(d_row['checklist_tecnico'] or '{}') if isinstance(d_row['checklist_tecnico'], str) else (d_row['checklist_tecnico'] or {})
+                        fn = (chk_f.get('fornecedor') or '').strip() if isinstance(chk_f, dict) else ''
+                        if fn and fn not in fornecedores_lista:
+                            fornecedores_lista.append(fn)
+                    except Exception:
+                        pass
+                config['fornecedores'] = fornecedores_lista
                 res_config = dict(config)
                 res_config['config'] = config
                 self.send_json(res_config)
                 return
 
-            # 9. Catálogo de Modelos de Produtos
+            # 8b. Catálogo de Fornecedores (Painel de Fornecedores & Relatórios de Compra)
+            if path == '/api/fornecedores':
+                try:
+                    sync_pull_from_supabase('fornecedores')
+                except Exception:
+                    pass
+
+                c.execute('SELECT COUNT(*) FROM fornecedores')
+                if c.fetchone()[0] == 0:
+                    cloud_forn = pull_fornecedores_from_supabase_cloud()
+                    if isinstance(cloud_forn, list) and len(cloud_forn) > 0:
+                        for f_item in cloud_forn:
+                            if isinstance(f_item, dict) and f_item.get('nome'):
+                                f_id_new = f_item.get('id') or str(uuid.uuid4())
+                                f_nome_new = str(f_item.get('nome')).strip()
+                                f_tel_new = str(f_item.get('telefone_whatsapp') or '').strip()
+                                f_cid_new = str(f_item.get('cidade_origem') or '').strip()
+                                f_obs_new = str(f_item.get('observacoes') or '').strip()
+                                f_created = f_item.get('created_at') or datetime.now().isoformat()
+                                c.execute('''
+                                    INSERT OR IGNORE INTO fornecedores (id, nome, telefone_whatsapp, cidade_origem, observacoes, created_at)
+                                    VALUES (?,?,?,?,?,?)
+                                ''', (f_id_new, f_nome_new, f_tel_new, f_cid_new, f_obs_new, f_created))
+                                sync_upsert_supabase('fornecedores', {
+                                    'id': f_id_new,
+                                    'nome': f_nome_new,
+                                    'telefone_whatsapp': f_tel_new,
+                                    'cidade_origem': f_cid_new,
+                                    'observacoes': f_obs_new,
+                                    'created_at': f_created
+                                })
+                        conn.commit()
+
+                # Garante também que qualquer fornecedor salvo em config_sistema ou em dispositivos conste na tabela fornecedores
+                c.execute("SELECT valor FROM config_sistema WHERE chave = 'fornecedores_lista'")
+                row_cfg_f = c.fetchone()
+                nomes_extras = []
+                if row_cfg_f and row_cfg_f['valor']:
+                    try:
+                        lf_cfg = json.loads(row_cfg_f['valor'])
+                        if isinstance(lf_cfg, list):
+                            nomes_extras.extend([str(x).strip() for x in lf_cfg if str(x).strip()])
+                    except Exception:
+                        pass
+                c.execute("SELECT checklist_tecnico FROM dispositivos")
+                for d_r in c.fetchall():
+                    try:
+                        chk_d = json.loads(d_r['checklist_tecnico'] or '{}') if isinstance(d_r['checklist_tecnico'], str) else (d_r['checklist_tecnico'] or {})
+                        fn_d = (chk_d.get('fornecedor') or '').strip() if isinstance(chk_d, dict) else ''
+                        if fn_d:
+                            nomes_extras.append(fn_d)
+                    except Exception:
+                        pass
+
+                now_f = datetime.now().isoformat()
+                inseriu_extra = False
+                for n_ext in nomes_extras:
+                    c.execute('SELECT id FROM fornecedores WHERE lower(nome) = lower(?)', (n_ext,))
+                    if not c.fetchone():
+                        c.execute(
+                            'INSERT OR IGNORE INTO fornecedores (id, nome, telefone_whatsapp, cidade_origem, observacoes, created_at) VALUES (?,?,?,?,?,?)',
+                            (str(uuid.uuid4()), n_ext, '', '', '', now_f)
+                        )
+                        inseriu_extra = True
+                if inseriu_extra:
+                    conn.commit()
+
+                c.execute('SELECT * FROM fornecedores ORDER BY nome COLLATE NOCASE ASC')
+                rows_f = [dict(r) for r in c.fetchall()]
+                self.send_json({'fornecedores': rows_f})
+                return
+
+            # 9. Catálogo de Modelos de Produtos (Ordenação Decrescente: Linha 18 -> 17 -> 16... -> 11 -> XR)
             if path == '/api/modelos':
-                c.execute('SELECT * FROM catalogo_modelos ORDER BY tipo ASC, nome ASC')
+                c.execute('SELECT * FROM catalogo_modelos')
                 rows = [dict(r) for r in c.fetchall()]
+
+                def _sort_key_modelo(m):
+                    tipo = (m.get('tipo') or 'Outros').strip()
+                    nome = (m.get('nome') or '').strip()
+                    nl = nome.lower()
+                    cat_order = {'iPhone': 0, 'MacBook': 1, 'iPad': 2, 'Apple Watch': 3, 'Acessório': 4}.get(tipo, 5)
+                    if tipo == 'iPhone' or nl.startswith('iphone'):
+                        # Extrai número da geração (ex: 18, 17, 16, 15, 14, 13, 12, 11) mesmo se o usuário cadastrou só "17 Pro Max" sem a palavra "iPhone"
+                        m_gen = re.search(r'(?:iphone\s*)?(\d{2})\b', nl)
+                        if m_gen:
+                            gen = float(m_gen.group(1))
+                        elif 'xr' in nl:
+                            gen = 10.2
+                        elif 'xs' in nl:
+                            gen = 10.5
+                        elif re.search(r'\bx\b', nl):
+                            gen = 10.0
+                        elif 'se' in nl:
+                            gen = 9.0
+                        else:
+                            gen = 0.0
+                        # Ordem de variante dentro da mesma linha: Pro Max (1) -> Pro (2) -> Plus/Air (3) -> Normal (4) -> mini/e (5)
+                        if 'pro max' in nl:
+                            var_rank = 1
+                        elif re.search(r'\bpro\b', nl):
+                            var_rank = 2
+                        elif 'plus' in nl or 'air' in nl:
+                            var_rank = 3
+                        elif 'mini' in nl or re.search(r'\d+e\b', nl):
+                            var_rank = 5
+                        else:
+                            var_rank = 4
+                        return (0, -gen, var_rank, nl)
+                    # Para MacBooks, iPads e Apple Watches, prioriza gerações mais novas (M4 > M3 > M2 > M1, Series 10 > 9 > 8)
+                    m_num = re.search(r'(?:m|series\s+|ultra\s+|geração\s*|mini\s+)(\d+)', nl)
+                    gen_other = float(m_num.group(1)) if m_num else 0.0
+                    return (cat_order, -gen_other, 0, nl)
+
+                rows.sort(key=_sort_key_modelo)
                 self.send_json({'modelos': rows})
                 return
 
@@ -2752,11 +3001,190 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                 })
                 return
 
+            # 0b. Cadastrar / Editar / Excluir Fornecedor
+            if path == '/api/fornecedores':
+                forn_id = (data.get('id') or '').strip() or None
+                nome_forn = str(data.get('nome') or '').strip()
+                tel_forn = str(data.get('telefone_whatsapp') or '').strip()
+                cidade_forn = str(data.get('cidade_origem') or '').strip()
+                cnpj_forn = str(data.get('cnpj_cpf') or '').strip()
+                email_forn = str(data.get('email') or '').strip()
+                pix_forn = str(data.get('chave_pix') or '').strip()
+                garantia_forn = str(data.get('prazo_garantia_padrao') or '').strip()
+                obs_forn = str(data.get('observacoes') or '').strip()
+                dados_extras_in = data.get('dados_extras') or {}
+                if isinstance(dados_extras_in, str):
+                    try:
+                        dados_extras_in = json.loads(dados_extras_in)
+                    except Exception:
+                        dados_extras_in = {}
+                if not isinstance(dados_extras_in, dict):
+                    dados_extras_in = {}
+                dados_extras_str = json.dumps(dados_extras_in, ensure_ascii=False)
+
+                if not nome_forn:
+                    self.send_json({'error': 'Informe o nome do fornecedor.'}, 400)
+                    return
+
+                if forn_id:
+                    c.execute('SELECT id, nome, created_at FROM fornecedores WHERE id = ?', (forn_id,))
+                    old_row = c.fetchone()
+                    old_nome = old_row['nome'] if old_row else None
+                    created_ref = (old_row['created_at'] if old_row and old_row['created_at'] else now_str)
+
+                    c.execute('SELECT id FROM fornecedores WHERE lower(nome) = lower(?) AND id != ?', (nome_forn, forn_id))
+                    if c.fetchone():
+                        self.send_json({'error': f'Já existe outro fornecedor cadastrado com o nome "{nome_forn}".'}, 400)
+                        return
+
+                    c.execute('''
+                        UPDATE fornecedores
+                        SET nome = ?, telefone_whatsapp = ?, cidade_origem = ?, cnpj_cpf = ?, email = ?,
+                            chave_pix = ?, prazo_garantia_padrao = ?, observacoes = ?, dados_extras = ?, updated_at = ?
+                        WHERE id = ?
+                    ''', (nome_forn, tel_forn, cidade_forn, cnpj_forn, email_forn, pix_forn, garantia_forn, obs_forn, dados_extras_str, now_str, forn_id))
+
+                    # Se renomeou o fornecedor, atualiza também nos aparelhos que referenciavam o nome antigo
+                    if old_nome and old_nome != nome_forn:
+                        c.execute("SELECT id, checklist_tecnico FROM dispositivos")
+                        for d_r in c.fetchall():
+                            try:
+                                chk_d = json.loads(d_r['checklist_tecnico'] or '{}') if isinstance(d_r['checklist_tecnico'], str) else (d_r['checklist_tecnico'] or {})
+                                if isinstance(chk_d, dict) and str(chk_d.get('fornecedor') or '').strip().lower() == old_nome.lower():
+                                    chk_d['fornecedor'] = nome_forn
+                                    chk_str = json.dumps(chk_d, ensure_ascii=False)
+                                    c.execute("UPDATE dispositivos SET checklist_tecnico = ? WHERE id = ?", (chk_str, d_r['id']))
+                                    sync_patch_supabase('dispositivos', 'id', d_r['id'], {'checklist_tecnico': chk_d})
+                            except Exception:
+                                pass
+                    saved_id = forn_id
+                else:
+                    c.execute('SELECT id, created_at FROM fornecedores WHERE lower(nome) = lower(?)', (nome_forn,))
+                    existing_f = c.fetchone()
+                    if existing_f:
+                        saved_id = existing_f['id']
+                        created_ref = existing_f['created_at'] or now_str
+                        c.execute('''
+                            UPDATE fornecedores
+                            SET nome = ?,
+                                telefone_whatsapp = CASE WHEN ? != '' THEN ? ELSE telefone_whatsapp END,
+                                cidade_origem = CASE WHEN ? != '' THEN ? ELSE cidade_origem END,
+                                cnpj_cpf = CASE WHEN ? != '' THEN ? ELSE cnpj_cpf END,
+                                email = CASE WHEN ? != '' THEN ? ELSE email END,
+                                chave_pix = CASE WHEN ? != '' THEN ? ELSE chave_pix END,
+                                prazo_garantia_padrao = CASE WHEN ? != '' THEN ? ELSE prazo_garantia_padrao END,
+                                observacoes = CASE WHEN ? != '' THEN ? ELSE observacoes END,
+                                updated_at = ?
+                            WHERE id = ?
+                        ''', (
+                            nome_forn,
+                            tel_forn, tel_forn,
+                            cidade_forn, cidade_forn,
+                            cnpj_forn, cnpj_forn,
+                            email_forn, email_forn,
+                            pix_forn, pix_forn,
+                            garantia_forn, garantia_forn,
+                            obs_forn, obs_forn,
+                            now_str, saved_id
+                        ))
+                    else:
+                        saved_id = str(uuid.uuid4())
+                        created_ref = now_str
+                        c.execute('''
+                            INSERT INTO fornecedores (
+                                id, nome, telefone_whatsapp, cidade_origem, cnpj_cpf, email,
+                                chave_pix, prazo_garantia_padrao, observacoes, dados_extras, created_at, updated_at
+                            )
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                        ''', (
+                            saved_id, nome_forn, tel_forn, cidade_forn, cnpj_forn, email_forn,
+                            pix_forn, garantia_forn, obs_forn, dados_extras_str, now_str, now_str
+                        ))
+
+                c.execute('SELECT * FROM fornecedores WHERE id = ?', (saved_id,))
+                saved_row = c.fetchone()
+                saved_dict = dict(saved_row) if saved_row else None
+
+                c.execute('SELECT * FROM fornecedores ORDER BY nome COLLATE NOCASE ASC')
+                rows_f = [dict(r) for r in c.fetchall()]
+                nomes_lista = [r['nome'] for r in rows_f]
+                c.execute(
+                    "INSERT INTO config_sistema (chave, valor) VALUES ('fornecedores_lista', ?) ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor",
+                    (json.dumps(nomes_lista, ensure_ascii=False),)
+                )
+                conn.commit()
+                conn.close()
+                conn = None
+
+                if saved_dict:
+                    sync_upsert_supabase('fornecedores', saved_dict)
+                sync_fornecedores_to_supabase_cloud(rows_f)
+                self.send_json({
+                    'success': True,
+                    'id': saved_id,
+                    'nome': nome_forn,
+                    'fornecedores': nomes_lista,
+                    'fornecedores_detalhes': rows_f
+                })
+                return
+
+            if path == '/api/fornecedores/delete':
+                forn_id = (data.get('id') or '').strip()
+                nome_del = (data.get('nome') or '').strip()
+                if forn_id:
+                    c.execute('SELECT nome FROM fornecedores WHERE id = ?', (forn_id,))
+                    r_del = c.fetchone()
+                    if r_del and not nome_del:
+                        nome_del = r_del['nome']
+                    c.execute('DELETE FROM fornecedores WHERE id = ?', (forn_id,))
+                elif nome_del:
+                    c.execute('SELECT id FROM fornecedores WHERE lower(nome) = lower(?)', (nome_del,))
+                    r_del = c.fetchone()
+                    if r_del:
+                        forn_id = r_del['id']
+                    c.execute('DELETE FROM fornecedores WHERE lower(nome) = lower(?)', (nome_del,))
+
+                c.execute('SELECT * FROM fornecedores ORDER BY nome COLLATE NOCASE ASC')
+                rows_f = [dict(r) for r in c.fetchall()]
+                nomes_lista = [r['nome'] for r in rows_f]
+                c.execute(
+                    "INSERT INTO config_sistema (chave, valor) VALUES ('fornecedores_lista', ?) ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor",
+                    (json.dumps(nomes_lista, ensure_ascii=False),)
+                )
+                conn.commit()
+                conn.close()
+                conn = None
+
+                if forn_id:
+                    sync_delete_supabase('fornecedores', 'id', forn_id)
+                elif nome_del:
+                    sync_delete_supabase('fornecedores', 'nome', nome_del)
+                sync_fornecedores_to_supabase_cloud(rows_f)
+                self.send_json({
+                    'success': True,
+                    'fornecedores': nomes_lista,
+                    'fornecedores_detalhes': rows_f,
+                    'message': 'Fornecedor removido com sucesso!'
+                })
+                return
+
             # 1. Cadastrar / Editar Dispositivo no Estoque
             if path == '/api/dispositivos':
                 disp_id = data.get('id')
                 checklist_val = data.get('checklist_tecnico', {})
-                checklist_json = json.dumps(checklist_val) if isinstance(checklist_val, dict) else (checklist_val or '{}')
+                if isinstance(checklist_val, str):
+                    try:
+                        checklist_val = json.loads(checklist_val)
+                    except Exception:
+                        checklist_val = {}
+                if not isinstance(checklist_val, dict):
+                    checklist_val = {}
+
+                numero_serie_in = str(data.get('numero_serie') if data.get('numero_serie') is not None else checklist_val.get('numero_serie', '')).strip().upper()
+                fornecedor_in = str(data.get('fornecedor') if data.get('fornecedor') is not None else checklist_val.get('fornecedor', '')).strip()
+                checklist_val['numero_serie'] = numero_serie_in
+                checklist_val['fornecedor'] = fornecedor_in
+                checklist_json = json.dumps(checklist_val, ensure_ascii=False)
                 
                 fotos_val = data.get('fotos', [])
                 fotos_json = json.dumps(fotos_val) if isinstance(fotos_val, list) else (fotos_val or '[]')
@@ -2767,10 +3195,28 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                 preco_minimo = float(data.get('preco_minimo', 0))
                 status_disp = data.get('status', 'Em Estoque')
 
+                # Se informou um fornecedor novo, salva na lista de fornecedores do sistema
+                if fornecedor_in:
+                    try:
+                        c.execute("INSERT OR IGNORE INTO fornecedores (nome) VALUES (?)", (fornecedor_in,))
+                        c.execute("SELECT valor FROM config_sistema WHERE chave = 'fornecedores_lista'")
+                        rf = c.fetchone()
+                        lf = json.loads(rf['valor']) if rf and rf['valor'] else []
+                        if isinstance(lf, list) and not any(x.lower() == fornecedor_in.lower() for x in lf):
+                            lf.append(fornecedor_in)
+                            c.execute(
+                                "INSERT INTO config_sistema (chave, valor) VALUES ('fornecedores_lista', ?) ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor",
+                                (json.dumps(lf, ensure_ascii=False),)
+                            )
+                    except Exception:
+                        pass
+
                 if disp_id:
                     c.execute("SELECT origem, cliente_origem_id FROM dispositivos WHERE id = ?", (disp_id,))
                     orig_row = c.fetchone()
                     origem_val = orig_row['origem'] if orig_row and orig_row['origem'] else 'Compra Fornecedor'
+                    if fornecedor_in and not (origem_val and 'Trade-In' in str(origem_val)):
+                        origem_val = f"Fornecedor: {fornecedor_in}"
                     cliente_origem_val = orig_row['cliente_origem_id'] if orig_row else None
 
                     # Atualização de aparelho existente
@@ -2779,7 +3225,7 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                             tipo = ?, modelo = ?, capacidade = ?, cor = ?, identificador_tipo = ?,
                             identificador_valor = ?, saude_bateria = ?, ciclos_bateria = ?, condicao_grau = ?,
                             checklist_tecnico = ?, status = ?, custo_compra = ?, custos_adicionais = ?,
-                            preco_sugerido = ?, preco_minimo = ?, notas_tecnicas = ?, fotos = ?
+                            preco_sugerido = ?, preco_minimo = ?, origem = ?, notas_tecnicas = ?, fotos = ?
                         WHERE id = ?
                     ''', (
                         data.get('tipo', 'iPhone'),
@@ -2797,6 +3243,7 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                         custos_adicionais,
                         preco_sugerido,
                         preco_minimo,
+                        origem_val,
                         data.get('notas_tecnicas', ''),
                         fotos_json,
                         disp_id
@@ -2816,6 +3263,7 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                     return
                 else:
                     new_id = str(uuid.uuid4())
+                    origem_novo = data.get('origem') or (f"Fornecedor: {fornecedor_in}" if fornecedor_in else 'Compra Fornecedor')
                     c.execute('''
                         INSERT INTO dispositivos (
                             id, tipo, modelo, capacidade, cor, identificador_tipo, identificador_valor,
@@ -2840,7 +3288,7 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                         custos_adicionais,
                         preco_sugerido,
                         preco_minimo,
-                        data.get('origem', 'Compra Fornecedor'),
+                        origem_novo,
                         data.get('cliente_origem_id'),
                         data.get('notas_tecnicas', ''),
                         fotos_json,
@@ -2961,8 +3409,19 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                 lucro_bruto = valor_venda_item - desconto - custo_aquisicao_item
                 margem_percentual = round((lucro_bruto / (valor_venda_item - desconto) * 100), 2) if (valor_venda_item - desconto) > 0 else 0
                 
-                meses_garantia = int(data.get('meses_garantia', 3))
-                garantia_ate = (datetime.now() + timedelta(days=meses_garantia * 30)).strftime('%Y-%m-%d')
+                garantia_raw = str(data.get('meses_garantia', '3')).strip().lower()
+                obs_pedido = str(data.get('observacoes') or '').strip()
+                if garantia_raw in ('apple', 'garantia apple', '0'):
+                    meses_garantia = 12
+                    garantia_ate = (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
+                    if '[Garantia Apple]' not in obs_pedido:
+                        obs_pedido = f"[Garantia Apple] {obs_pedido}".strip()
+                else:
+                    try:
+                        meses_garantia = int(garantia_raw)
+                    except Exception:
+                        meses_garantia = 3
+                    garantia_ate = (datetime.now() + timedelta(days=meses_garantia * 30)).strftime('%Y-%m-%d')
                 
                 # Inserir pedido
                 c.execute('''
@@ -2975,7 +3434,7 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                     pedido_id, numero_pedido, cliente_id, now_str, valor_venda_item, desconto,
                     valor_trade_in, valor_total_liquido, data.get('forma_pagamento', 'PIX'),
                     meses_garantia, garantia_ate, custo_aquisicao_item, lucro_bruto, margem_percentual,
-                    'Concluída', data.get('observacoes', ''), now_str
+                    'Concluída', obs_pedido, now_str
                 ))
                 
                 # Inserir item da venda
@@ -3003,12 +3462,28 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                     disp_entrada_id = str(uuid.uuid4())
                     trade_in_id = str(uuid.uuid4())
                     
-                    checklist_trade_in = json.dumps(trade_in_info.get('checklist_tecnico', {
-                        "face_touch_id": True, "tela_original": True, "bateria_original": True,
-                        "true_tone": True, "carcaca_sem_trincas": True, "cameras_ok": True
-                    }))
+                    chk_ti = trade_in_info.get('checklist_tecnico')
+                    if isinstance(chk_ti, str):
+                        try:
+                            chk_ti = json.loads(chk_ti)
+                        except Exception:
+                            chk_ti = {}
+                    if not isinstance(chk_ti, dict):
+                        chk_ti = {
+                            "face_touch_id": True, "tela_original": True, "bateria_original": True,
+                            "true_tone": True, "carcaca_sem_trincas": True, "cameras_ok": True
+                        }
+                    serial_ti = str(trade_in_info.get('numero_serie') or chk_ti.get('numero_serie') or '').strip().upper()
+                    if serial_ti:
+                        chk_ti['numero_serie'] = serial_ti
+                    checklist_trade_in = json.dumps(chk_ti, ensure_ascii=False)
                     
-                    # Cadastrar dispositivo de entrada no estoque imediatamente
+                    obs_ti_extra = str(trade_in_info.get('notas_tecnicas') or '').strip()
+                    notas_ti_final = f"Entrou como Trade-In no pedido {numero_pedido}. Avaliado por R$ {valor_trade_in:.2f}"
+                    if obs_ti_extra:
+                        notas_ti_final = f"{obs_ti_extra} | {notas_ti_final}"
+
+                    # Cadastrar dispositivo de entrada IMEDIATAMENTE EM ESTOQUE
                     c.execute('''
                         INSERT INTO dispositivos (
                             id, tipo, modelo, capacidade, cor, identificador_tipo, identificador_valor,
@@ -3021,21 +3496,21 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                         trade_in_info.get('tipo', 'iPhone'),
                         trade_in_info.get('modelo', 'iPhone de Troca'),
                         trade_in_info.get('capacidade', '128GB'),
-                        trade_in_info.get('cor', 'Diversas'),
+                        trade_in_info.get('cor', 'Preto'),
                         trade_in_info.get('identificador_tipo', 'IMEI'),
                         trade_in_info.get('identificador_valor', f"TRADE-{datetime.now().strftime('%H%M%S')}").strip(),
                         int(trade_in_info.get('saude_bateria', 85)),
                         int(trade_in_info.get('ciclos_bateria')) if trade_in_info.get('ciclos_bateria') else None,
-                        trade_in_info.get('condicao_grau', 'Grau B (Leves marcas)'),
+                        trade_in_info.get('condicao_grau', 'Grau A (Excelente)'),
                         checklist_trade_in,
-                        'Em Manutenção/Revisão', # Entra para revisão técnica preventiva
-                        valor_trade_in, # Custo de aquisição é o valor avaliado do Trade-In!
+                        trade_in_info.get('status') or 'Em Estoque',
+                        valor_trade_in,
                         0.0,
                         float(trade_in_info.get('preco_sugerido_revenda', valor_trade_in * 1.35)),
                         float(trade_in_info.get('preco_minimo_revenda', valor_trade_in * 1.20)),
                         'Trade-In / Troca',
                         cliente_id,
-                        f"Entrou como Trade-In no pedido {numero_pedido}. Avaliado por R$ {valor_trade_in:.2f}",
+                        notas_ti_final,
                         now_str,
                         now_str
                     ))
@@ -3044,11 +3519,12 @@ class AppleStoreHandler(http.server.SimpleHTTPRequestHandler):
                     cli_nome = cli_info['nome'] if cli_info else 'Cliente'
                     cli_cpf = (cli_info['cpf_documento'] if cli_info and cli_info['cpf_documento'] else 'Não informado')
                     cli_tel = cli_info['telefone_whatsapp'] if cli_info else ''
+                    serial_str_termo = f" | Nº de Série: {serial_ti}" if serial_ti else ""
                     termo_texto = f"""TERMO DE DECLARAÇÃO, COMPRA E CESSÃO DE APARELHO USADO (TRADE-IN)
 Data: {datetime.now().strftime('%d/%m/%Y às %H:%M')}
 Vendedor/Cedente: {cli_nome} | CPF/Documento: {cli_cpf} | WhatsApp: {cli_tel}
 Aparelho Entregue: {trade_in_info.get('modelo')} {trade_in_info.get('capacidade')} - Cor: {trade_in_info.get('cor')}
-Identificador ({trade_in_info.get('identificador_tipo')}): {trade_in_info.get('identificador_valor')}
+Identificador ({trade_in_info.get('identificador_tipo')}): {trade_in_info.get('identificador_valor')}{serial_str_termo}
 Valor da Avaliação / Crédito Concedido: R$ {valor_trade_in:.2f}
 
 DECLARAÇÃO DE PROCEDÊNCIA LÍCITA:
@@ -3151,16 +3627,16 @@ O Cedente acima qualificado declara sob as penas da lei (Art. 180 e Art. 299 do 
                         'identificador_valor': trade_in_info.get('identificador_valor', f"TRADE-{datetime.now().strftime('%H%M%S')}").strip(),
                         'saude_bateria': int(trade_in_info.get('saude_bateria', 85)),
                         'ciclos_bateria': int(trade_in_info.get('ciclos_bateria')) if trade_in_info.get('ciclos_bateria') else None,
-                        'condicao_grau': trade_in_info.get('condicao_grau', 'Grau B (Leves marcas)'),
+                        'condicao_grau': trade_in_info.get('condicao_grau', 'Grau A (Excelente)'),
                         'checklist_tecnico': trade_in_info.get('checklist_tecnico', {}),
-                        'status': 'Em Manutenção/Revisão',
+                        'status': status_entrada,
                         'custo_compra': valor_trade_in,
                         'custos_adicionais': 0.0,
                         'preco_sugerido': float(trade_in_info.get('preco_sugerido_revenda', valor_trade_in * 1.35)),
                         'preco_minimo': float(trade_in_info.get('preco_minimo_revenda', valor_trade_in * 1.20)),
                         'origem': 'Trade-In / Troca',
                         'cliente_origem_id': cliente_id,
-                        'notas_tecnicas': f"Entrou como Trade-In no pedido {numero_pedido}. Avaliado por R$ {valor_trade_in:.2f}",
+                        'notas_tecnicas': notas_entrada,
                         'data_entrada': now_str,
                         'created_at': now_str
                     })

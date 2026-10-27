@@ -349,3 +349,38 @@ BEGIN
     END IF;
 END $$;
 
+-- ==============================================================================
+-- TABELA: FORNECEDORES (Cadastro de Parceiros, Dados Extras Flexíveis e Relatórios)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS fornecedores (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nome VARCHAR(255) NOT NULL UNIQUE,
+    telefone_whatsapp VARCHAR(50),
+    cidade_origem VARCHAR(150),
+    cnpj_cpf VARCHAR(30),
+    email VARCHAR(255),
+    chave_pix VARCHAR(255),
+    prazo_garantia_padrao VARCHAR(100),
+    observacoes TEXT,
+    dados_extras JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fornecedores_nome ON fornecedores(nome);
+
+ALTER TABLE fornecedores ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE tablename = 'fornecedores' AND policyname = 'Permitir leitura total fornecedores'
+    ) THEN
+        CREATE POLICY "Permitir leitura total fornecedores"
+        ON fornecedores FOR ALL
+        USING (true)
+        WITH CHECK (true);
+    END IF;
+END $$;
+
+

@@ -23,6 +23,11 @@ const AppState = {
     currentDocData: null,
     currentDocTab: 'recibo',
     modelos: [],
+    fornecedores: [],
+    fornecedoresCatalogo: [],
+    fornecedorPeriodo: 'todos',
+    fornecedorSelecionadoRelatorio: 'Todos',
+    termoBuscaFornecedores: '',
     filtroCategoriaModelo: 'Todos',
     termoBuscaModelos: '',
     fotosCadastro: [],
@@ -137,12 +142,13 @@ const TabTitles = {
     posvenda: { title: "Pós-Venda & Ciclo de Troca", subtitle: "Alertas de garantia balcão e lembrete anual de upgrade." },
     documentos: { title: "Recibos & Termos", subtitle: "Emissão de comprovantes oficiais e termos de cessão." },
     modelos: { title: "Catálogo de Produtos & Modelos", subtitle: "Padronização de modelos oficiais para seleção em todo o sistema." },
+    fornecedores: { title: "Fornecedores & Volume de Compras", subtitle: "Cadastro de fornecedores, histórico de entradas e relatório financeiro por parceiro." },
     consolidado: { title: "Relatório Consolidado & Fechamento", subtitle: "Auditoria analítica de entradas, saídas, lucros e comparativo mensal com exportação PDF." },
     rotas: { title: "Rotas & Entregas Inteligentes", subtitle: "Roteirização rápida, cálculo de KM e navegação direta no Google Maps." }
 };
 
 function switchTab(tabName) {
-    const tabs = ['dashboard', 'estoque', 'tradein', 'crm', 'encomendas', 'posvenda', 'documentos', 'modelos', 'consolidado', 'rotas'];
+    const tabs = ['dashboard', 'estoque', 'tradein', 'crm', 'encomendas', 'posvenda', 'documentos', 'modelos', 'fornecedores', 'consolidado', 'rotas'];
     tabs.forEach(t => {
         const viewEl = document.getElementById(`view-${t}`);
         const navEl = document.getElementById(`nav-${t}`);
@@ -184,6 +190,7 @@ function switchTab(tabName) {
     if (tabName === 'posvenda') renderPosVenda();
     if (tabName === 'documentos') renderDocumentos();
     if (tabName === 'modelos') renderModelos();
+    if (tabName === 'fornecedores') renderFornecedores();
     if (tabName === 'consolidado') renderConsolidado();
     if (tabName === 'rotas') renderRotas();
 }
@@ -198,7 +205,7 @@ function toggleMobileMenu() {
 // ==============================================================================
 async function loadAllData() {
     try {
-        const [dashRes, dispRes, cliRes, pedRes, tradeRes, crmRes, encRes, modRes, rotasRes] = await Promise.all([
+        const [dashRes, dispRes, cliRes, pedRes, tradeRes, crmRes, encRes, modRes, fornRes, rotasRes] = await Promise.all([
             fetch(`/api/dashboard?periodo=${AppState.dashboardPeriodo || 'mes_atual'}`).then(r => r.json()),
             fetch('/api/dispositivos').then(r => r.json()),
             fetch('/api/clientes').then(r => r.json()),
@@ -207,6 +214,7 @@ async function loadAllData() {
             fetch('/api/crm').then(r => r.json()),
             fetch('/api/encomendas').then(r => r.json()),
             fetch('/api/modelos').then(r => r.json()).catch(() => ({ modelos: [] })),
+            fetch('/api/fornecedores').then(r => r.json()).catch(() => ({ fornecedores: [], nomes: [] })),
             fetch('/api/rotas').then(r => r.json()).catch(() => ({ rotas: [] }))
         ]);
 
@@ -217,8 +225,17 @@ async function loadAllData() {
         AppState.tradeIns = tradeRes.trade_ins || [];
         AppState.crmLeads = crmRes.leads || [];
         AppState.encomendas = encRes.encomendas || [];
-        AppState.modelos = modRes.modelos || [];
+        AppState.modelos = ordenarListaModelos(garantirModelosPadraoNoFrontend(modRes.modelos || []));
+        if (Array.isArray(fornRes.fornecedores)) {
+            AppState.fornecedoresCatalogo = fornRes.fornecedores;
+        }
+        if (Array.isArray(fornRes.nomes)) {
+            AppState.fornecedores = fornRes.nomes;
+        }
         AppState.rotas = rotasRes.rotas || [];
+
+        // Sincroniza lista de fornecedores a partir dos dispositivos carregados e config
+        sincronizarFornecedoresDeDispositivos();
 
         renderDashboard();
         renderEstoque();
@@ -229,9 +246,11 @@ async function loadAllData() {
         renderPosVenda();
         renderDocumentos();
         renderModelos();
+        renderFornecedores();
         renderRotas();
         atualizarSelectsClientes();
         atualizarSelectsModelos();
+        atualizarSelectFornecedores();
     } catch (err) {
         console.error("Erro ao carregar dados:", err);
     }
@@ -631,12 +650,16 @@ function renderEstoque() {
         const cor = (d.cor || '').toLowerCase();
         const cap = (d.capacidade || '').toLowerCase();
         const grau = (d.condicao_grau || '').toLowerCase();
+        const numSerie = (d.numero_serie || (d.checklist_tecnico && d.checklist_tecnico.numero_serie) || '').toLowerCase();
+        const forn = (d.fornecedor || (d.checklist_tecnico && d.checklist_tecnico.fornecedor) || '').toLowerCase();
 
         const matchSearch = modelo.includes(search) || 
                             idValor.includes(search) || 
                             cor.includes(search) ||
                             cap.includes(search) ||
-                            grau.includes(search);
+                            grau.includes(search) ||
+                            numSerie.includes(search) ||
+                            forn.includes(search);
 
         return matchTipo && matchStatus && matchSearch;
     });
@@ -716,6 +739,8 @@ function renderEstoque() {
                         }
                         chkObj = chkObj || {};
                         const imeiStatus = chkObj.imei_status || 'pendente';
+                        const numSerie = d.numero_serie || chkObj.numero_serie || '';
+                        const fornNome = d.fornecedor || chkObj.fornecedor || '';
                         let badgeImei = '';
                         if (imeiStatus === 'limpo') {
                             badgeImei = `<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1"><i class="fa-solid fa-shield-check text-emerald-600"></i>Limpo</span>`;
@@ -727,17 +752,19 @@ function renderEstoque() {
                         return `
                             <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-2xl border ${imeiStatus === 'restricao' ? 'border-rose-300 bg-rose-50/40' : 'border-slate-100'} mb-3 gap-2">
                                 <div class="overflow-hidden min-w-0 flex-1">
-                                    <div class="flex items-center gap-1.5 mb-0.5">
+                                    <div class="flex items-center gap-1.5 mb-0.5 flex-wrap">
                                         <span class="text-[9px] uppercase font-bold text-slate-400">${d.identificador_tipo}</span>
                                         ${badgeImei}
+                                        ${fornNome ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 truncate max-w-[110px]" title="Fornecedor: ${fornNome}"><i class="fa-solid fa-truck-field mr-0.5 text-[8px]"></i>${fornNome}</span>` : ''}
                                     </div>
                                     <span class="font-mono text-xs font-bold text-slate-800 tracking-wider truncate block">${d.identificador_valor}</span>
+                                    ${numSerie ? `<span class="font-mono text-[10px] font-semibold text-slate-500 truncate block mt-0.5">SN: ${numSerie}</span>` : ''}
                                 </div>
                                 <div class="flex items-center gap-1 shrink-0">
                                     <button onclick="abrirConsultaAnatelDireto('${d.identificador_valor}', '${d.id}')" title="Copiar IMEI e consultar na Anatel (Celular Legal)" class="p-1.5 text-emerald-600 hover:text-emerald-800 rounded-lg hover:bg-emerald-100/60 transition-colors">
                                         <i class="fa-solid fa-tower-cell text-xs"></i>
                                     </button>
-                                    <button onclick="copiarTexto('${d.identificador_valor}')" title="Copiar ${d.identificador_tipo}" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200/50">
+                                    <button onclick="copiarTexto('${numSerie || d.identificador_valor}')" title="Copiar ${numSerie ? 'Nº de Série / IMEI' : d.identificador_tipo}" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200/50">
                                         <i class="fa-regular fa-copy text-xs"></i>
                                     </button>
                                 </div>
@@ -887,6 +914,12 @@ function abrirModalEditarAparelho(dispId) {
     if (selImeiStatus) {
         selImeiStatus.value = chk.imei_status || 'pendente';
     }
+    const elNumSerie = document.getElementById('cad-numero-serie');
+    if (elNumSerie) {
+        elNumSerie.value = disp.numero_serie || chk.numero_serie || '';
+    }
+    const fornAtual = disp.fornecedor || chk.fornecedor || '';
+    atualizarSelectFornecedores(fornAtual);
     aoDigitarIMEICadastro(disp.identificador_valor || '');
 
     document.getElementById('cad-custo-compra').value = (disp.custo_compra || 0).toFixed(2);
@@ -1351,6 +1384,42 @@ function renderPosVenda() {
 // ==============================================================================
 // VIEW 7: RECIBOS & DOCUMENTOS HISTÓRICO
 // ==============================================================================
+function obterInfoGarantiaPedido(p) {
+    const obs = String((p && p.observacoes) || '');
+    const mg = String((p && p.meses_garantia) !== undefined && (p && p.meses_garantia) !== null ? p.meses_garantia : '3').toLowerCase();
+    const ehApple = obs.includes('[Garantia Apple]') || mg === 'apple';
+    const dataFim = p && p.garantia_ate ? formatData(p.garantia_ate) : '--';
+
+    if (ehApple) {
+        return {
+            ehApple: true,
+            prazoLabel: 'Garantia Oficial Apple',
+            resumoCurto: 'Garantia Apple',
+            badgeTabela: '<span class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold"><i class="fa-brands fa-apple mr-1"></i>Garantia Apple</span>',
+            textoWhatsApp: 'Garantia Oficial Apple'
+        };
+    }
+
+    const mesesNum = parseInt(mg, 10) || 3;
+    if (mesesNum === 4) {
+        return {
+            ehApple: false,
+            prazoLabel: '4 meses (120 dias)',
+            resumoCurto: `Válida até ${dataFim} (4 meses)`,
+            badgeTabela: `${dataFim} <span class="text-[10px] text-slate-400">(4m)</span>`,
+            textoWhatsApp: `Válida até *${dataFim}* (4 meses)`
+        };
+    }
+
+    return {
+        ehApple: false,
+        prazoLabel: '90 dias / 3 meses',
+        resumoCurto: `Válida até ${dataFim} (90 dias / 3 meses)`,
+        badgeTabela: `${dataFim} <span class="text-[10px] text-slate-400">(90d)</span>`,
+        textoWhatsApp: `Válida até *${dataFim}* (90 dias / 3 meses)`
+    };
+}
+
 function renderDocumentos() {
     const tbody = document.getElementById('tabela-vendas-corpo');
     if (!tbody) return;
@@ -1360,7 +1429,9 @@ function renderDocumentos() {
         return;
     }
 
-    tbody.innerHTML = AppState.pedidos.map(p => `
+    tbody.innerHTML = AppState.pedidos.map(p => {
+        const infoGar = obterInfoGarantiaPedido(p);
+        return `
         <tr class="hover:bg-slate-50/80 transition-colors">
             <td class="px-4 py-3.5 font-mono font-bold text-blue-600">${p.numero_pedido}</td>
             <td class="px-4 py-3.5 text-slate-500 font-medium">${formatData(p.data_venda)}</td>
@@ -1370,7 +1441,7 @@ function renderDocumentos() {
             </td>
             <td class="px-4 py-3.5 text-slate-800 font-semibold">${p.dispositivos_descricao || 'iPhone'}</td>
             <td class="px-4 py-3.5 font-mono font-black text-slate-900">${formatMoeda(p.valor_total_liquido)}</td>
-            <td class="px-4 py-3.5 font-mono text-slate-500 font-semibold">${formatData(p.garantia_ate)}</td>
+            <td class="px-4 py-3.5 font-mono text-slate-500 font-semibold">${infoGar.badgeTabela}</td>
             <td class="px-4 py-3.5 text-right">
                 <div class="flex items-center justify-end gap-1.5">
                     <button onclick="visualizarDocumentoPedido('${p.id}')" class="btn-pill-secondary text-xs">
@@ -1382,7 +1453,7 @@ function renderDocumentos() {
                 </div>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
 }
 
 async function excluirPedido(pedidoId, numeroPedido, btnEl) {
@@ -1455,7 +1526,10 @@ function openModalCadastroAparelho() {
     document.getElementById('cad-bateria-num').value = 100;
     atualizarIndicadorBateria(100);
     marcarTodosChecklist(true);
+    const elNumSerie = document.getElementById('cad-numero-serie');
+    if (elNumSerie) elNumSerie.value = '';
     atualizarSelectsModelos();
+    atualizarSelectFornecedores('');
     atualizarModelosSugeridos();
     calcularMargensCadastro();
     openModal('modal-cadastro-aparelho');
@@ -1758,18 +1832,24 @@ function abrirConsultaAnatelPopup(inputId, selectStatusId) {
     }
 }
 
-function abrirConsultaApplePopup(inputId) {
-    const el = document.getElementById(inputId);
-    const valor = el ? el.value.trim() : '';
+function abrirConsultaApplePopup(inputId, fallbackInputId) {
+    const elPrimary = document.getElementById(inputId);
+    const elFallback = fallbackInputId ? document.getElementById(fallbackInputId) : null;
+    let valor = elPrimary ? elPrimary.value.trim() : '';
+    let tipoCod = 'Número de Série';
+    if (!valor && elFallback) {
+        valor = elFallback.value.trim();
+        tipoCod = 'IMEI';
+    }
     if (!valor) {
-        alert("Digite o IMEI ou Número de Série primeiro para consultar na Apple.");
-        if (el) el.focus();
+        alert("Digite o Número de Série (ou IMEI) primeiro para consultar a garantia no site da Apple.");
+        if (elPrimary) elPrimary.focus();
         return;
     }
     if (navigator.clipboard) {
         navigator.clipboard.writeText(valor).catch(() => {});
     }
-    showToast(`Código ${valor} copiado! Aperte Cmd+V na janela da Apple.`);
+    showToast(`${tipoCod} ${valor} copiado! Aperte Cmd+V na janela da Apple.`);
 
     const largura = 580;
     const altura = 720;
@@ -1894,13 +1974,20 @@ async function salvarNovoDispositivo(e) {
         }
     }
 
+    const numeroSerieEl = document.getElementById('cad-numero-serie');
+    const numeroSerie = numeroSerieEl ? numeroSerieEl.value.trim().toUpperCase() : '';
+    const fornecedorEl = document.getElementById('cad-fornecedor');
+    const fornecedor = fornecedorEl ? fornecedorEl.value.trim() : '';
+
     const checklist = {
         face_touch_id: document.getElementById('chk-facetouch').checked,
         tela_original: document.getElementById('chk-tela').checked,
         bateria_original: document.getElementById('chk-bateria').checked,
         true_tone: document.getElementById('chk-truetone').checked,
         imei_status: imeiStatus,
-        imei_verificado_em: imeiStatus !== 'pendente' ? new Date().toISOString() : null
+        imei_verificado_em: imeiStatus !== 'pendente' ? new Date().toISOString() : null,
+        numero_serie: numeroSerie || null,
+        fornecedor: fornecedor || null
     };
 
     const payload = {
@@ -1910,6 +1997,8 @@ async function salvarNovoDispositivo(e) {
         cor: document.getElementById('cad-cor').value.trim(),
         identificador_tipo: tipoIdent,
         identificador_valor: valorIdent,
+        numero_serie: numeroSerie || null,
+        fornecedor: fornecedor || null,
         saude_bateria: parseInt(document.getElementById('cad-bateria').value),
         ciclos_bateria: document.getElementById('cad-ciclos').value ? parseInt(document.getElementById('cad-ciclos').value) : null,
         condicao_grau: document.getElementById('cad-grau').value,
@@ -1925,8 +2014,11 @@ async function salvarNovoDispositivo(e) {
 
     if (editId) {
         payload.id = editId;
+        if (fornecedor) {
+            payload.origem = `Fornecedor: ${fornecedor}`;
+        }
     } else {
-        payload.origem = 'Compra Fornecedor';
+        payload.origem = fornecedor ? `Fornecedor: ${fornecedor}` : 'Compra Fornecedor';
     }
 
     try {
@@ -2033,6 +2125,17 @@ function toggleFormTradeIn(checked) {
     } else {
         formCampos.classList.add('hidden');
         document.getElementById('ti-valor-avaliado').value = "0.00";
+        const elRevenda = document.getElementById('ti-preco-revenda');
+        if (elRevenda) elRevenda.value = "";
+    }
+    calcularCheckoutVenda();
+}
+
+function aoDigitarValorTradeIn(valor) {
+    const valNum = parseFloat(valor) || 0;
+    const elRevenda = document.getElementById('ti-preco-revenda');
+    if (elRevenda && (!elRevenda.dataset.manualEdit || !elRevenda.value)) {
+        elRevenda.value = valNum > 0 ? (valNum * 1.35).toFixed(2) : '';
     }
     calcularCheckoutVenda();
 }
@@ -2086,27 +2189,46 @@ async function processarVendaComTradeIn(e) {
             alert("BLOQUEIO DE SEGURANÇA: O aparelho de troca (Trade-In) foi marcado com RESTRIÇÃO DE IMEI (Anatel / iCloud). Não é permitido receber aparelho bloqueado na troca.");
             return;
         }
+        const tiModelo = (document.getElementById('ti-modelo')?.value || '').trim() || 'iPhone Usado';
+        const tiCapacidade = document.getElementById('ti-capacidade')?.value || '128GB';
+        const tiCor = (document.getElementById('ti-cor')?.value || '').trim() || 'Preto';
+        const tiBateria = parseInt(document.getElementById('ti-bateria')?.value, 10) || 88;
+        const tiGrau = document.getElementById('ti-grau')?.value || 'Grau A (Excelente)';
+        const tiIdentificador = (document.getElementById('ti-identificador')?.value || '').trim() || `TI-${Date.now().toString().slice(-6)}`;
+        const tiNumeroSerie = (document.getElementById('ti-numero-serie')?.value || '').trim().toUpperCase();
+        const tiPrecoRevenda = parseFloat(document.getElementById('ti-preco-revenda')?.value) || Number((valorTradeIn * 1.35).toFixed(2));
+        const tiNotas = (document.getElementById('ti-notas')?.value || '').trim();
+
+        const modCatalogo = (AppState.modelos || []).find(m => m.nome.toLowerCase() === tiModelo.toLowerCase());
+        const tiTipo = (modCatalogo && modCatalogo.tipo) ? modCatalogo.tipo : 'iPhone';
+
         tradeInPayload = {
-            tipo: 'iPhone',
-            modelo: document.getElementById('ti-modelo').value || 'iPhone Usado',
-            capacidade: '128GB',
-            cor: 'Space Gray',
+            tipo: tiTipo,
+            modelo: tiModelo,
+            capacidade: tiCapacidade,
+            cor: tiCor,
             identificador_tipo: 'IMEI',
-            identificador_valor: document.getElementById('ti-identificador').value || `TI-${Date.now().toString().slice(-6)}`,
-            saude_bateria: 85,
-            condicao_grau: 'Grau B (Leves marcas)',
-            preco_sugerido_revenda: valorTradeIn * 1.35,
-            preco_minimo_revenda: valorTradeIn * 1.20,
+            identificador_valor: tiIdentificador,
+            numero_serie: tiNumeroSerie || null,
+            saude_bateria: tiBateria,
+            condicao_grau: tiGrau,
+            preco_sugerido_revenda: tiPrecoRevenda,
+            preco_minimo_revenda: Number((tiPrecoRevenda * 0.92).toFixed(2)),
+            status: 'Em Estoque',
+            notas_tecnicas: tiNotas || null,
             checklist_tecnico: {
                 face_touch_id: true,
                 tela_original: true,
                 bateria_original: true,
                 true_tone: true,
                 imei_status: tiStatusImei,
-                imei_verificado_em: tiStatusImei !== 'pendente' ? new Date().toISOString() : null
+                imei_verificado_em: tiStatusImei !== 'pendente' ? new Date().toISOString() : null,
+                numero_serie: tiNumeroSerie || null
             }
         };
     }
+
+    const garantiaSelVal = document.getElementById('venda-garantia-meses').value;
 
     const payload = {
         dispositivo_id: dispId,
@@ -2115,7 +2237,7 @@ async function processarVendaComTradeIn(e) {
         desconto: desconto,
         valor_trade_in: valorTradeIn,
         forma_pagamento: 'PIX / Cartão',
-        meses_garantia: parseInt(document.getElementById('venda-garantia-meses').value),
+        meses_garantia: garantiaSelVal,
         trade_in: tradeInPayload
     };
 
@@ -2189,12 +2311,13 @@ function renderConteudoDocumento() {
 
     const dataFormatada = formatData(p.data_venda);
     const garantiaAteFormatada = formatData(p.garantia_ate);
+    const infoGar = obterInfoGarantiaPedido(p);
 
     // Configurar botão WhatsApp
     const btnWhats = document.getElementById('btn-whatsapp-doc');
     if (btnWhats) {
         btnWhats.onclick = () => {
-            const mensagem = `Olá, *${p.cliente_nome}*! 👋🦁\n\nAqui é da *Leão Imports*!\n\n📋 *Pedido:* ${p.numero_pedido}\n📱 *Aparelho:* ${p.dispositivos_descricao}\n💰 *Total Pago:* ${formatMoeda(p.valor_total_liquido)}\n🛡️ *Garantia Especialista:* Válida até *${garantiaAteFormatada}* (${p.meses_garantia * 30} dias balcão)\n\nQualquer dúvida, estamos à disposição! 🚀`;
+            const mensagem = `Olá, *${p.cliente_nome}*! 👋🦁\n\nAqui é da *Leão Imports*!\n\n📋 *Pedido:* ${p.numero_pedido}\n📱 *Aparelho:* ${p.dispositivos_descricao}\n💰 *Total Pago:* ${formatMoeda(p.valor_total_liquido)}\n🛡️ *Garantia:* ${infoGar.textoWhatsApp}\n\nQualquer dúvida, estamos à disposição! 🚀`;
             window.open(`https://wa.me/${limparTelefone(p.telefone_whatsapp)}?text=${encodeURIComponent(mensagem)}`, '_blank');
         };
     }
@@ -2232,7 +2355,7 @@ function renderConteudoDocumento() {
                 <div class="p-3 border border-slate-200 rounded-xl flex justify-between items-center">
                     <div>
                         <strong class="text-slate-900 text-sm block">${p.dispositivos_descricao}</strong>
-                        <span class="text-[11px] text-slate-500">Garantia balcão de ${p.meses_garantia * 30} dias</span>
+                        <span class="text-[11px] text-slate-500">Garantia: ${infoGar.prazoLabel}</span>
                     </div>
                     <span class="font-mono font-bold text-slate-900">${formatMoeda(p.valor_subtotal)}</span>
                 </div>
@@ -2254,7 +2377,7 @@ function renderConteudoDocumento() {
             </div>
 
             <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-950 text-xs flex justify-between items-center">
-                <span>🛡️ Garantia Especialista até: <strong>${garantiaAteFormatada}</strong></span>
+                <span>🛡️ ${infoGar.ehApple ? 'Garantia:' : 'Garantia Especialista:'} <strong>${infoGar.resumoCurto}</strong></span>
                 <span class="font-bold text-[10px] bg-emerald-200 px-2 py-0.5 rounded-full uppercase">Ativa</span>
             </div>
         `;
@@ -2268,7 +2391,7 @@ function renderConteudoDocumento() {
                 </div>
             </div>
             <div class="space-y-3 text-xs text-slate-700 leading-relaxed text-justify">
-                <p><strong>1. PRAZO:</strong> Garantia balcão de <strong>${p.meses_garantia * 30} dias</strong> referente ao aparelho <strong>${p.dispositivos_descricao}</strong>, com vigência até <strong>${garantiaAteFormatada}</strong>.</p>
+                <p><strong>1. PRAZO:</strong> ${infoGar.ehApple ? `Aparelho coberto pela <strong>Garantia Oficial Apple</strong> referente ao item <strong>${p.dispositivos_descricao}</strong>.` : `Garantia da loja de <strong>${infoGar.prazoLabel}</strong> referente ao aparelho <strong>${p.dispositivos_descricao}</strong>, com vigência até <strong>${garantiaAteFormatada}</strong>.`}</p>
                 <p><strong>2. COBERTURA:</strong> Cobre defeitos de funcionamento em componentes eletrônicos internos (placa lógica, Face ID/Touch ID, câmeras, conector de carga).</p>
                 <p><strong>3. EXCLUSÕES:</strong> Danos por queda, impacto mecânico, trincas na carcaça/tela ou oxidação por contato com líquidos.</p>
             </div>
@@ -2493,12 +2616,674 @@ async function checkSupabaseConfig() {
     try {
         const res = await fetch('/api/config');
         const data = await res.json();
-        if (data.config && data.config.supabase_url && data.config.supabase_key) {
-            initSupabaseClient(data.config.supabase_url, data.config.supabase_key);
+        if (data.config) {
+            AppState.config = data.config;
+            if (data.config.supabase_url && data.config.supabase_key) {
+                initSupabaseClient(data.config.supabase_url, data.config.supabase_key);
+            }
+        }
+        if (Array.isArray(data.fornecedores)) {
+            AppState.fornecedores = data.fornecedores;
+            atualizarSelectFornecedores();
         }
     } catch (e) {
         console.log("Modo local ativo.");
     }
+}
+
+function sincronizarFornecedoresDeDispositivos() {
+    const mapa = new Map();
+    const mapaCat = new Map();
+
+    (AppState.fornecedoresCatalogo || []).forEach(fc => {
+        if (!fc || !fc.nome) return;
+        const limpo = String(fc.nome).trim();
+        if (limpo) {
+            mapa.set(limpo.toLowerCase(), limpo);
+            mapaCat.set(limpo.toLowerCase(), fc);
+        }
+    });
+
+    (AppState.fornecedores || []).forEach(f => {
+        const limpo = String(f || '').trim();
+        if (limpo) {
+            mapa.set(limpo.toLowerCase(), limpo);
+            if (!mapaCat.has(limpo.toLowerCase())) {
+                mapaCat.set(limpo.toLowerCase(), {
+                    id: `forn-auto-${limpo.toLowerCase().replace(/\s+/g, '-')}`,
+                    nome: limpo,
+                    telefone_whatsapp: '',
+                    cidade_origem: '',
+                    observacoes: ''
+                });
+            }
+        }
+    });
+
+    (AppState.dispositivos || []).forEach(d => {
+        const forn = extrairFornecedorDispositivo(d);
+        if (forn && forn !== 'Upgrade / Trade-In Cliente' && forn !== 'Sem Fornecedor Informado') {
+            mapa.set(forn.toLowerCase(), forn);
+            if (!mapaCat.has(forn.toLowerCase())) {
+                mapaCat.set(forn.toLowerCase(), {
+                    id: `forn-auto-${forn.toLowerCase().replace(/\s+/g, '-')}`,
+                    nome: forn,
+                    telefone_whatsapp: '',
+                    cidade_origem: '',
+                    observacoes: ''
+                });
+            }
+        }
+    });
+
+    AppState.fornecedores = Array.from(mapa.values()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    AppState.fornecedoresCatalogo = Array.from(mapaCat.values()).sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'));
+
+    const badge = document.getElementById('badge-total-fornecedores');
+    if (badge) badge.innerText = AppState.fornecedoresCatalogo.length;
+}
+
+function extrairFornecedorDispositivo(d) {
+    if (!d) return '';
+    let chk = d.checklist_tecnico;
+    if (typeof chk === 'string') {
+        try { chk = JSON.parse(chk); } catch (e) { chk = {}; }
+    }
+    chk = chk || {};
+    let forn = String(d.fornecedor || chk.fornecedor || '').trim();
+    if (!forn && d.origem && String(d.origem).startsWith('Fornecedor:')) {
+        forn = String(d.origem).split(':', 2)[1].trim();
+    }
+    if (!forn && d.origem && String(d.origem).toLowerCase().includes('trade-in')) {
+        return 'Upgrade / Trade-In Cliente';
+    }
+    return forn || '';
+}
+
+function atualizarSelectFornecedores(valorPreferencial = null) {
+    const sel = document.getElementById('cad-fornecedor');
+    if (sel) {
+        const currentVal = (valorPreferencial !== null && valorPreferencial !== undefined) ? String(valorPreferencial).trim() : sel.value;
+        const lista = [...(AppState.fornecedores || [])];
+
+        if (currentVal && !lista.some(f => f.toLowerCase() === currentVal.toLowerCase())) {
+            lista.push(currentVal);
+            lista.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        }
+
+        let html = `<option value="">-- Selecione o Fornecedor --</option>`;
+        lista.forEach(nome => {
+            const isSel = currentVal && nome.toLowerCase() === currentVal.toLowerCase();
+            html += `<option value="${nome.replace(/"/g, '&quot;')}" ${isSel ? 'selected' : ''}>${nome}</option>`;
+        });
+
+        sel.innerHTML = html;
+        if (currentVal) {
+            const match = Array.from(sel.options).find(o => o.value.toLowerCase() === currentVal.toLowerCase());
+            if (match) sel.value = match.value;
+        } else {
+            sel.value = '';
+        }
+    }
+
+    // Também atualiza o seletor de fornecedor na aba de Relatório de Fornecedores
+    const selRel = document.getElementById('filtro-fornecedor-relatorio');
+    if (selRel) {
+        const atualRel = AppState.fornecedorSelecionadoRelatorio || 'Todos';
+        let htmlRel = `<option value="Todos">Todos os Fornecedores</option>`;
+        (AppState.fornecedores || []).forEach(nome => {
+            const isSel = atualRel.toLowerCase() === nome.toLowerCase();
+            htmlRel += `<option value="${nome.replace(/"/g, '&quot;')}" ${isSel ? 'selected' : ''}>${nome}</option>`;
+        });
+        htmlRel += `<option value="Sem Fornecedor Informado" ${atualRel === 'Sem Fornecedor Informado' ? 'selected' : ''}>Sem Fornecedor Informado</option>`;
+        htmlRel += `<option value="Upgrade / Trade-In Cliente" ${atualRel === 'Upgrade / Trade-In Cliente' ? 'selected' : ''}>Upgrade / Trade-In Cliente</option>`;
+        selRel.innerHTML = htmlRel;
+    }
+}
+
+function cadastrarNovoFornecedorRapido() {
+    openModalNovoFornecedor(null, 'cad-fornecedor');
+}
+
+// ==============================================================================
+// VIEW 8.5: PAINEL DE FORNECEDORES & RELATÓRIOS POR FORNECEDOR
+// ==============================================================================
+function filtrarDispositivosPorPeriodoFornecedor(dispositivos, periodo) {
+    if (!Array.isArray(dispositivos)) return [];
+    if (!periodo || periodo === 'todos') return dispositivos;
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const todayDate = now.getDate();
+
+    return dispositivos.filter(d => {
+        const dataRef = d.data_entrada || d.created_at;
+        if (!dataRef) return true;
+        const dt = new Date(dataRef);
+        if (isNaN(dt.getTime())) return true;
+
+        if (periodo === 'mes_atual') {
+            return dt.getFullYear() === currentYear && dt.getMonth() === currentMonth;
+        }
+        if (periodo === 'mes_passado') {
+            const targetMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+            const targetYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+            return dt.getFullYear() === targetYear && dt.getMonth() === targetMonth;
+        }
+        if (periodo === 'ultimos_30') {
+            const trintaDiasAtras = new Date(currentYear, currentMonth, todayDate - 30);
+            return dt >= trintaDiasAtras && dt <= now;
+        }
+        if (periodo === 'ano') {
+            return dt.getFullYear() === currentYear;
+        }
+        return true;
+    });
+}
+
+function setFornecedorPeriodo(periodo) {
+    AppState.fornecedorPeriodo = periodo || 'todos';
+    const container = document.getElementById('fornecedores-filtros-periodo');
+    if (container) {
+        container.querySelectorAll('button').forEach(btn => {
+            btn.className = btn.id === `btn-forn-periodo-${periodo}` ? 'pill-tab active' : 'pill-tab inactive';
+        });
+    }
+    renderFornecedores();
+}
+
+function handleBuscaFornecedores(val) {
+    AppState.termoBuscaFornecedores = val || '';
+    renderFornecedores();
+}
+
+function selecionarFornecedorRelatorio(nomeFornecedor) {
+    AppState.fornecedorSelecionadoRelatorio = nomeFornecedor || 'Todos';
+    const sel = document.getElementById('filtro-fornecedor-relatorio');
+    if (sel && sel.value !== AppState.fornecedorSelecionadoRelatorio) {
+        sel.value = AppState.fornecedorSelecionadoRelatorio;
+    }
+    renderFornecedores();
+}
+
+function renderFornecedores() {
+    sincronizarFornecedoresDeDispositivos();
+    atualizarSelectFornecedores();
+
+    const tbodyRanking = document.getElementById('tabela-fornecedores-corpo');
+    const tbodyItens = document.getElementById('tabela-relatorio-fornecedor-itens');
+    if (!tbodyRanking || !tbodyItens) return;
+
+    const periodo = AppState.fornecedorPeriodo || 'todos';
+    const termo = (AppState.termoBuscaFornecedores || '').toLowerCase().trim();
+    const fornFiltroRelatorio = AppState.fornecedorSelecionadoRelatorio || 'Todos';
+
+    const dispPeriodo = filtrarDispositivosPorPeriodoFornecedor(AppState.dispositivos || [], periodo);
+
+    // Mapeia métricas por fornecedor
+    const statsMap = new Map();
+
+    // Inicializa com todos os fornecedores cadastrados no catálogo
+    (AppState.fornecedoresCatalogo || []).forEach(fc => {
+        if (!fc || !fc.nome) return;
+        const chave = fc.nome.toLowerCase().trim();
+        statsMap.set(chave, {
+            id: fc.id,
+            nome: fc.nome,
+            telefone_whatsapp: fc.telefone_whatsapp || '',
+            cidade_origem: fc.cidade_origem || '',
+            cnpj_cpf: fc.cnpj_cpf || '',
+            email: fc.email || '',
+            chave_pix: fc.chave_pix || '',
+            prazo_garantia_padrao: fc.prazo_garantia_padrao || '',
+            observacoes: fc.observacoes || '',
+            isCatalogo: true,
+            qtdTotal: 0,
+            qtdEstoque: 0,
+            qtdVendidos: 0,
+            custoTotal: 0,
+            receitaProjetada: 0,
+            lucroEsperado: 0,
+            itens: []
+        });
+    });
+
+    // Agrega todos os dispositivos do período
+    let totalAparelhosCompras = 0;
+    let totalEmEstoqueCompras = 0;
+    let totalVendidosCompras = 0;
+    let capitalInvestidoTotal = 0;
+    let lucroEsperadoTotal = 0;
+
+    dispPeriodo.forEach(d => {
+        const fornBruto = extrairFornecedorDispositivo(d);
+        const nomeForn = fornBruto || 'Sem Fornecedor Informado';
+        const chave = nomeForn.toLowerCase().trim();
+
+        if (!statsMap.has(chave)) {
+            statsMap.set(chave, {
+                id: null,
+                nome: nomeForn,
+                telefone_whatsapp: '',
+                cidade_origem: nomeForn === 'Upgrade / Trade-In Cliente' ? 'Troca de Cliente (PDV)' : '',
+                observacoes: '',
+                isCatalogo: false,
+                qtdTotal: 0,
+                qtdEstoque: 0,
+                qtdVendidos: 0,
+                custoTotal: 0,
+                receitaProjetada: 0,
+                lucroEsperado: 0,
+                itens: []
+            });
+        }
+
+        const st = statsMap.get(chave);
+        const custo = (parseFloat(d.custo_compra) || 0) + (parseFloat(d.custos_adicionais) || 0);
+        const preco = parseFloat(d.preco_sugerido) || 0;
+        const lucro = preco - custo;
+
+        st.qtdTotal += 1;
+        if (d.status === 'Vendido') {
+            st.qtdVendidos += 1;
+        } else {
+            st.qtdEstoque += 1;
+        }
+        st.custoTotal += custo;
+        st.receitaProjetada += preco;
+        st.lucroEsperado += lucro;
+        st.itens.push(d);
+
+        // Contabiliza nos cards executivos de compras (exceto se quiser focar em todos)
+        totalAparelhosCompras += 1;
+        if (d.status === 'Vendido') {
+            totalVendidosCompras += 1;
+        } else {
+            totalEmEstoqueCompras += 1;
+        }
+        capitalInvestidoTotal += custo;
+        lucroEsperadoTotal += lucro;
+    });
+
+    const listaRanking = Array.from(statsMap.values()).filter(item => {
+        // Se for grupo automático sem itens no período, não exibe
+        if (!item.isCatalogo && item.qtdTotal === 0) return false;
+        if (!termo) return true;
+        return (
+            item.nome.toLowerCase().includes(termo) ||
+            (item.cidade_origem && item.cidade_origem.toLowerCase().includes(termo)) ||
+            (item.telefone_whatsapp && item.telefone_whatsapp.toLowerCase().includes(termo)) ||
+            (item.observacoes && item.observacoes.toLowerCase().includes(termo))
+        );
+    }).sort((a, b) => {
+        if (b.custoTotal !== a.custoTotal) return b.custoTotal - a.custoTotal;
+        if (b.qtdTotal !== a.qtdTotal) return b.qtdTotal - a.qtdTotal;
+        return a.nome.localeCompare(b.nome, 'pt-BR');
+    });
+
+    // Atualiza Cards Executivos
+    const totalFornCat = (AppState.fornecedoresCatalogo || []).length;
+    const fornComCompras = Array.from(statsMap.values()).filter(x => x.isCatalogo && x.qtdTotal > 0).length;
+    const ticketMedioCompra = totalAparelhosCompras > 0 ? (capitalInvestidoTotal / totalAparelhosCompras) : 0;
+    const margemMediaCompra = capitalInvestidoTotal > 0 ? ((lucroEsperadoTotal / capitalInvestidoTotal) * 100).toFixed(1) : '0.0';
+
+    const elTotalForn = document.getElementById('forn-card-total-fornecedores');
+    const elAtivosForn = document.getElementById('forn-card-fornecedores-ativos');
+    const elTotalAp = document.getElementById('forn-card-total-aparelhos');
+    const elEstAtivo = document.getElementById('forn-card-estoque-ativo');
+    const elCapInv = document.getElementById('forn-card-capital-investido');
+    const elTicketMed = document.getElementById('forn-card-ticket-medio');
+    const elLucroEsp = document.getElementById('forn-card-lucro-esperado');
+    const elMargemMed = document.getElementById('forn-card-margem-media');
+
+    if (elTotalForn) elTotalForn.innerText = totalFornCat;
+    if (elAtivosForn) elAtivosForn.innerText = `${fornComCompras} com compras no período`;
+    if (elTotalAp) elTotalAp.innerText = totalAparelhosCompras;
+    if (elEstAtivo) elEstAtivo.innerText = `${totalEmEstoqueCompras} em estoque • ${totalVendidosCompras} vendidos`;
+    if (elCapInv) elCapInv.innerText = formatMoeda(capitalInvestidoTotal);
+    if (elTicketMed) elTicketMed.innerText = `Custo médio: ${formatMoeda(ticketMedioCompra)} / un.`;
+    if (elLucroEsp) elLucroEsp.innerText = formatMoeda(lucroEsperadoTotal);
+    if (elMargemMed) elMargemMed.innerText = `Retorno projetado: +${margemMediaCompra}% sobre custo`;
+
+    // Renderiza Tabela 1: Ranking de Fornecedores
+    if (listaRanking.length === 0) {
+        tbodyRanking.innerHTML = `
+            <tr>
+                <td colspan="8" class="py-12 text-center text-slate-400">
+                    <div class="flex flex-col items-center justify-center gap-2">
+                        <i class="fa-solid fa-truck-field text-3xl text-slate-300"></i>
+                        <p class="font-semibold text-slate-500">Nenhum fornecedor cadastrado ou encontrado.</p>
+                        <p class="text-[11px] text-slate-400">Cadastre seus fornecedores para selecioná-los ao dar entrada no estoque e acompanhar relatórios.</p>
+                        <button onclick="openModalNovoFornecedor()" class="btn-pill-primary mt-2">
+                            <i class="fa-solid fa-plus"></i> Cadastrar Primeiro Fornecedor
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    } else {
+        tbodyRanking.innerHTML = listaRanking.map((f, idx) => {
+            const custoMedio = f.qtdTotal > 0 ? (f.custoTotal / f.qtdTotal) : 0;
+            const telLimpo = limparTelefone(f.telefone_whatsapp);
+            const isSelected = fornFiltroRelatorio.toLowerCase() === f.nome.toLowerCase();
+            const nomeEscapado = f.nome.replace(/'/g, "\\'");
+
+            return `
+                <tr class="${isSelected ? 'bg-blue-50/70' : 'hover:bg-slate-50/80'} transition-colors">
+                    <td class="px-4 py-3.5">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-6 h-6 rounded-full ${idx < 3 && f.custoTotal > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'} flex items-center justify-center font-mono text-[10px] font-black shrink-0">
+                                ${idx + 1}º
+                            </span>
+                            <div>
+                                <span class="font-black text-slate-900 text-xs block">${f.nome}</span>
+                                ${f.observacoes ? `<span class="text-[10px] text-slate-400 block truncate max-w-[210px]" title="${f.observacoes.replace(/"/g, '&quot;')}">${f.observacoes}</span>` : ''}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3.5">
+                        <div class="space-y-0.5">
+                            ${f.telefone_whatsapp ? `
+                                <span class="font-mono text-[11px] font-bold text-slate-700 block">
+                                    <i class="fa-brands fa-whatsapp text-emerald-500 mr-1"></i>${f.telefone_whatsapp}
+                                </span>
+                            ` : `<span class="text-[10px] text-slate-400 block">Sem telefone</span>`}
+                            ${f.cidade_origem ? `
+                                <span class="text-[10px] text-slate-500 font-medium block">
+                                    <i class="fa-solid fa-location-dot text-slate-400 mr-1"></i>${f.cidade_origem}
+                                </span>
+                            ` : ''}
+                        </div>
+                    </td>
+                    <td class="px-4 py-3.5 text-center">
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-mono font-black ${f.qtdTotal > 0 ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-slate-100 text-slate-400'}">
+                            ${f.qtdTotal} un.
+                        </span>
+                    </td>
+                    <td class="px-4 py-3.5 text-center whitespace-nowrap">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Disponíveis em Estoque">
+                            ${f.qtdEstoque} est.
+                        </span>
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 ml-1" title="Unidades já Vendidas">
+                            ${f.qtdVendidos} vend.
+                        </span>
+                    </td>
+                    <td class="px-4 py-3.5 text-right font-mono font-black text-slate-900 whitespace-nowrap">
+                        ${formatMoeda(f.custoTotal)}
+                    </td>
+                    <td class="px-4 py-3.5 text-right font-mono text-slate-600 font-semibold whitespace-nowrap">
+                        ${formatMoeda(custoMedio)}
+                    </td>
+                    <td class="px-4 py-3.5 text-right font-mono font-black text-emerald-600 whitespace-nowrap">
+                        +${formatMoeda(f.lucroEsperado)}
+                    </td>
+                    <td class="px-4 py-3.5 text-right whitespace-nowrap print:hidden">
+                        <div class="inline-flex items-center gap-1 justify-end">
+                            <button type="button" onclick="selecionarFornecedorRelatorio('${nomeEscapado}')"
+                                    class="px-2.5 py-1 rounded-lg text-[10px] font-bold ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} transition-colors"
+                                    title="Filtrar aparelhos deste fornecedor abaixo">
+                                <i class="fa-solid fa-filter mr-1"></i>Ver Aparelhos
+                            </button>
+                            ${telLimpo ? `
+                                <a href="https://wa.me/55${telLimpo}" target="_blank"
+                                   title="Conversar no WhatsApp"
+                                   class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center justify-center transition-colors">
+                                    <i class="fa-brands fa-whatsapp text-xs"></i>
+                                </a>
+                            ` : ''}
+                            ${f.isCatalogo ? `
+                                <button type="button" onclick="openModalNovoFornecedor('${f.id || nomeEscapado}')"
+                                        title="Editar Fornecedor"
+                                        class="w-7 h-7 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 flex items-center justify-center transition-colors">
+                                    <i class="fa-solid fa-pen-to-square text-xs"></i>
+                                </button>
+                                <button type="button" onclick="excluirFornecedor('${f.id || ''}', '${nomeEscapado}')"
+                                        title="Excluir Fornecedor"
+                                        class="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors">
+                                    <i class="fa-solid fa-trash text-xs"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Renderiza Tabela 2: Relatório Analítico de Aparelhos por Fornecedor
+    const itensRelatorio = dispPeriodo.filter(d => {
+        const fornItem = extrairFornecedorDispositivo(d) || 'Sem Fornecedor Informado';
+        if (fornFiltroRelatorio && fornFiltroRelatorio !== 'Todos') {
+            return fornItem.toLowerCase() === fornFiltroRelatorio.toLowerCase();
+        }
+        return true;
+    });
+
+    const subEl = document.getElementById('subtitulo-relatorio-fornecedor-itens');
+    if (subEl) {
+        if (fornFiltroRelatorio && fornFiltroRelatorio !== 'Todos') {
+            const somaFiltro = itensRelatorio.reduce((acc, x) => acc + (parseFloat(x.custo_compra) || 0) + (parseFloat(x.custos_adicionais) || 0), 0);
+            subEl.innerHTML = `Exibindo <strong>${itensRelatorio.length} aparelho(s)</strong> do fornecedor <strong>${fornFiltroRelatorio}</strong> • Volume Total: <strong>${formatMoeda(somaFiltro)}</strong>`;
+        } else {
+            subEl.innerText = `Exibindo todos os ${itensRelatorio.length} aparelho(s) registrados no período selecionado.`;
+        }
+    }
+
+    if (itensRelatorio.length === 0) {
+        tbodyItens.innerHTML = `
+            <tr>
+                <td colspan="8" class="py-8 text-center text-slate-400">
+                    Nenhum aparelho encontrado para o filtro de fornecedor e período selecionados.
+                </td>
+            </tr>
+        `;
+    } else {
+        tbodyItens.innerHTML = itensRelatorio.map(d => {
+            let chk = d.checklist_tecnico;
+            if (typeof chk === 'string') {
+                try { chk = JSON.parse(chk); } catch (e) { chk = {}; }
+            }
+            chk = chk || {};
+            const fornNome = extrairFornecedorDispositivo(d) || 'Sem Fornecedor Informado';
+            const numSerie = d.numero_serie || chk.numero_serie || '';
+            const custo = (parseFloat(d.custo_compra) || 0) + (parseFloat(d.custos_adicionais) || 0);
+            const preco = parseFloat(d.preco_sugerido) || 0;
+            const lucro = preco - custo;
+            const statusBadge = d.status === 'Vendido'
+                ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">Vendido</span>`
+                : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">${d.status || 'Em Estoque'}</span>`;
+
+            return `
+                <tr class="hover:bg-slate-50/80 transition-colors">
+                    <td class="px-3.5 py-3 text-slate-500 font-mono text-[11px] whitespace-nowrap">${formatData(d.data_entrada || d.created_at)}</td>
+                    <td class="px-3.5 py-3 font-bold text-slate-800 whitespace-nowrap">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 text-[11px]">
+                            <i class="fa-solid fa-truck-field text-[9px]"></i> ${fornNome}
+                        </span>
+                    </td>
+                    <td class="px-3.5 py-3">
+                        <span class="font-bold text-slate-900 block">${d.modelo} (${d.capacidade || ''})</span>
+                        <span class="text-[10px] text-slate-400">${d.cor || ''} • Bat. ${d.saude_bateria || 100}% • ${d.condicao_grau || ''}</span>
+                    </td>
+                    <td class="px-3.5 py-3 font-mono text-[11px] text-slate-600">
+                        <span class="font-bold block">IMEI: ${d.identificador_valor || '--'}</span>
+                        ${numSerie ? `<span class="text-[10px] text-indigo-600 font-bold block">SN: ${numSerie}</span>` : ''}
+                    </td>
+                    <td class="px-3.5 py-3 text-right font-mono font-bold text-slate-800 whitespace-nowrap">${formatMoeda(custo)}</td>
+                    <td class="px-3.5 py-3 text-right font-mono font-semibold text-slate-600 whitespace-nowrap">${formatMoeda(preco)}</td>
+                    <td class="px-3.5 py-3 text-right font-mono font-bold text-emerald-600 whitespace-nowrap">+${formatMoeda(lucro)}</td>
+                    <td class="px-3.5 py-3 text-center whitespace-nowrap">${statusBadge}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+}
+
+function openModalNovoFornecedor(fornIdOrNome = null, targetSelectId = '') {
+    const modal = document.getElementById('modal-cadastro-fornecedor');
+    if (!modal) return;
+
+    const titulo = document.getElementById('modal-fornecedor-titulo');
+    const inputId = document.getElementById('forn-edit-id');
+    const inputTarget = document.getElementById('forn-select-target');
+    const inputNome = document.getElementById('forn-nome');
+    const inputZap = document.getElementById('forn-whatsapp');
+    const inputCidade = document.getElementById('forn-cidade');
+    const inputCnpj = document.getElementById('forn-cnpj-cpf');
+    const inputGarantia = document.getElementById('forn-garantia-padrao');
+    const inputPix = document.getElementById('forn-chave-pix');
+    const inputEmail = document.getElementById('forn-email');
+    const inputObs = document.getElementById('forn-observacoes');
+
+    if (inputTarget) inputTarget.value = targetSelectId || '';
+
+    if (fornIdOrNome) {
+        const forn = (AppState.fornecedoresCatalogo || []).find(
+            f => String(f.id) === String(fornIdOrNome) || String(f.nome || '').toLowerCase() === String(fornIdOrNome).toLowerCase()
+        );
+        if (forn) {
+            if (titulo) titulo.innerText = 'Editar Fornecedor';
+            if (inputId) inputId.value = forn.id || forn.nome;
+            if (inputNome) inputNome.value = forn.nome || '';
+            if (inputZap) inputZap.value = forn.telefone_whatsapp || '';
+            if (inputCidade) inputCidade.value = forn.cidade_origem || '';
+            if (inputCnpj) inputCnpj.value = forn.cnpj_cpf || '';
+            if (inputGarantia) inputGarantia.value = forn.prazo_garantia_padrao || '';
+            if (inputPix) inputPix.value = forn.chave_pix || '';
+            if (inputEmail) inputEmail.value = forn.email || '';
+            if (inputObs) inputObs.value = forn.observacoes || '';
+        }
+    } else {
+        if (titulo) titulo.innerText = 'Cadastrar Novo Fornecedor';
+        if (inputId) inputId.value = '';
+        if (inputNome) inputNome.value = '';
+        if (inputZap) inputZap.value = '';
+        if (inputCidade) inputCidade.value = '';
+        if (inputCnpj) inputCnpj.value = '';
+        if (inputGarantia) inputGarantia.value = '';
+        if (inputPix) inputPix.value = '';
+        if (inputEmail) inputEmail.value = '';
+        if (inputObs) inputObs.value = '';
+    }
+
+    openModal('modal-cadastro-fornecedor');
+    setTimeout(() => {
+        if (inputNome) inputNome.focus();
+    }, 120);
+}
+
+async function salvarFornecedorCatalogo(e) {
+    e.preventDefault();
+    const editId = document.getElementById('forn-edit-id') ? document.getElementById('forn-edit-id').value.trim() : '';
+    const targetSelectId = document.getElementById('forn-select-target') ? document.getElementById('forn-select-target').value.trim() : '';
+    const nome = document.getElementById('forn-nome') ? document.getElementById('forn-nome').value.trim() : '';
+    const whatsapp = document.getElementById('forn-whatsapp') ? document.getElementById('forn-whatsapp').value.trim() : '';
+    const cidade = document.getElementById('forn-cidade') ? document.getElementById('forn-cidade').value.trim() : '';
+    const cnpj_cpf = document.getElementById('forn-cnpj-cpf') ? document.getElementById('forn-cnpj-cpf').value.trim() : '';
+    const prazo_garantia_padrao = document.getElementById('forn-garantia-padrao') ? document.getElementById('forn-garantia-padrao').value.trim() : '';
+    const chave_pix = document.getElementById('forn-chave-pix') ? document.getElementById('forn-chave-pix').value.trim() : '';
+    const email = document.getElementById('forn-email') ? document.getElementById('forn-email').value.trim() : '';
+    const observacoes = document.getElementById('forn-observacoes') ? document.getElementById('forn-observacoes').value.trim() : '';
+
+    if (!nome) {
+        alert("Informe o nome do fornecedor.");
+        return;
+    }
+
+    const payload = {
+        nome,
+        telefone_whatsapp: whatsapp,
+        cidade_origem: cidade,
+        cnpj_cpf,
+        prazo_garantia_padrao,
+        chave_pix,
+        email,
+        observacoes
+    };
+    if (editId) payload.id = editId;
+
+    try {
+        const res = await fetch('/api/fornecedores', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (Array.isArray(data.fornecedores_detalhes)) {
+                AppState.fornecedoresCatalogo = data.fornecedores_detalhes;
+            }
+            if (Array.isArray(data.fornecedores)) {
+                AppState.fornecedores = data.fornecedores;
+            }
+            closeModal('modal-cadastro-fornecedor');
+
+            // Se houve edição de fornecedor ou se precisamos atualizar tudo
+            if (editId) {
+                await loadAllData();
+            } else {
+                sincronizarFornecedoresDeDispositivos();
+                atualizarSelectFornecedores(nome);
+                renderFornecedores();
+            }
+
+            if (targetSelectId) {
+                const targetEl = document.getElementById(targetSelectId);
+                if (targetEl) targetEl.value = nome;
+            }
+
+            showToast(editId ? `Fornecedor "${nome}" atualizado!` : `Fornecedor "${nome}" cadastrado com sucesso!`);
+        } else {
+            alert(data.error || "Erro ao salvar fornecedor.");
+        }
+    } catch (err) {
+        console.error("Erro ao salvar fornecedor:", err);
+        alert("Erro de conexão ao salvar fornecedor.");
+    }
+}
+
+async function excluirFornecedor(id, nome) {
+    if (!confirm(`Deseja realmente remover o fornecedor "${nome}" do catálogo?\n\nOs aparelhos já cadastrados no estoque não serão excluídos.`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/fornecedores/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, nome })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (Array.isArray(data.fornecedores_detalhes)) {
+                AppState.fornecedoresCatalogo = data.fornecedores_detalhes;
+            } else {
+                AppState.fornecedoresCatalogo = (AppState.fornecedoresCatalogo || []).filter(
+                    f => String(f.id) !== String(id) && String(f.nome || '').toLowerCase() !== String(nome || '').toLowerCase()
+                );
+            }
+            if (Array.isArray(data.fornecedores)) {
+                AppState.fornecedores = data.fornecedores;
+            } else {
+                AppState.fornecedores = (AppState.fornecedores || []).filter(
+                    n => String(n || '').toLowerCase() !== String(nome || '').toLowerCase()
+                );
+            }
+            sincronizarFornecedoresDeDispositivos();
+            atualizarSelectFornecedores();
+            renderFornecedores();
+            showToast(`Fornecedor "${nome}" removido!`);
+        } else {
+            alert(data.error || "Erro ao remover fornecedor.");
+        }
+    } catch (err) {
+        alert("Erro de conexão ao remover fornecedor.");
+    }
+}
+
+function imprimirRelatorioFornecedoresPDF() {
+    window.print();
 }
 
 function initSupabaseClient(url, key) {
@@ -2676,14 +3461,103 @@ function showToast(msg, icon = 'fa-check') {
 }
 
 // ==============================================================================
-// GESTÃO DO CATÁLOGO DE MODELOS / PRODUTOS PADRONIZADOS
+// GESTÃO DO CATÁLOGO DE MODELOS / PRODUTOS PADRONIZADOS & ORDENAÇÃO DECRESCENTE
 // ==============================================================================
+const MODELOS_IPHONE_OBRIGATORIOS = [
+    'iPhone 18 Pro Max', 'iPhone 18 Pro',
+    'iPhone 17 Pro Max', 'iPhone 17 Pro', 'iPhone 17',
+    'iPhone 16 Pro Max', 'iPhone 16 Pro', 'iPhone 16 Plus', 'iPhone 16',
+    'iPhone 15 Pro Max', 'iPhone 15 Pro', 'iPhone 15 Plus', 'iPhone 15',
+    'iPhone 14 Pro Max', 'iPhone 14 Pro', 'iPhone 14 Plus', 'iPhone 14',
+    'iPhone 13 Pro Max', 'iPhone 13 Pro', 'iPhone 13', 'iPhone 13 mini',
+    'iPhone 12 Pro Max', 'iPhone 12 Pro', 'iPhone 12', 'iPhone 12 mini',
+    'iPhone 11 Pro Max', 'iPhone 11 Pro', 'iPhone 11',
+    'iPhone XR'
+];
+
+function garantirModelosPadraoNoFrontend(lista) {
+    const arr = Array.isArray(lista) ? [...lista] : [];
+    const existentes = new Set(arr.map(m => String(m.nome || '').toLowerCase().trim()));
+    MODELOS_IPHONE_OBRIGATORIOS.forEach((nome, idx) => {
+        if (!existentes.has(nome.toLowerCase())) {
+            arr.push({
+                id: `mod-auto-${idx}-${nome.toLowerCase().replace(/\s+/g, '-')}`,
+                tipo: 'iPhone',
+                nome: nome
+            });
+            existentes.add(nome.toLowerCase());
+        }
+    });
+    return arr;
+}
+
+function obterPesoOrdenacaoModelo(mod) {
+    const tipo = String((mod && mod.tipo) || 'Outros').trim();
+    const nome = String((mod && mod.nome) || '').trim();
+    const nLower = nome.toLowerCase();
+
+    const ordemCat = {
+        'iPhone': 1,
+        'MacBook': 2,
+        'iPad': 3,
+        'Apple Watch': 4,
+        'Acessório': 5,
+        'Outros': 6
+    };
+    const catRank = ordemCat[tipo] || 9;
+
+    if (tipo === 'iPhone' || nLower.startsWith('iphone')) {
+        let genNum = 0;
+        const matchNum = nLower.match(/(?:iphone\s*)?(\d{2})\b/);
+        if (matchNum) {
+            genNum = parseInt(matchNum[1], 10);
+        } else if (nLower.includes('xr')) {
+            genNum = 10.2;
+        } else if (nLower.includes('xs')) {
+            genNum = 10.5;
+        } else if (nLower.includes('se')) {
+            genNum = 10.8;
+        } else if (/\bx\b/.test(nLower)) {
+            genNum = 10.0;
+        }
+
+        // Pro Max (1) -> Pro (2) -> Plus (3) -> Normal (4) -> mini (5)
+        let varRank = 4;
+        if (nLower.includes('pro max')) {
+            varRank = 1;
+        } else if (/\bpro\b/.test(nLower)) {
+            varRank = 2;
+        } else if (nLower.includes('plus') || nLower.includes('max')) {
+            varRank = 3;
+        } else if (nLower.includes('mini')) {
+            varRank = 5;
+        }
+
+        return { catRank: 1, genSort: -genNum, varRank, nomeLower: nLower };
+    }
+
+    return { catRank, genSort: 0, varRank: 0, nomeLower: nLower };
+}
+
+function ordenarListaModelos(lista) {
+    if (!Array.isArray(lista)) return [];
+    return [...lista].sort((a, b) => {
+        const ka = obterPesoOrdenacaoModelo(a);
+        const kb = obterPesoOrdenacaoModelo(b);
+        if (ka.catRank !== kb.catRank) return ka.catRank - kb.catRank;
+        if (ka.genSort !== kb.genSort) return ka.genSort - kb.genSort;
+        if (ka.varRank !== kb.varRank) return ka.varRank - kb.varRank;
+        return ka.nomeLower.localeCompare(kb.nomeLower, 'pt-BR');
+    });
+}
+
 function renderModelos() {
     const corpo = document.getElementById('tabela-modelos-corpo');
     if (!corpo) return;
 
     const badge = document.getElementById('badge-total-modelos');
-    const todosModelos = AppState.modelos || [];
+    const todosModelos = ordenarListaModelos(garantirModelosPadraoNoFrontend(AppState.modelos || []));
+    AppState.modelos = todosModelos;
     if (badge) badge.innerText = todosModelos.length;
 
     const filtroCat = AppState.filtroCategoriaModelo || 'Todos';
@@ -2890,7 +3764,7 @@ async function salvarModeloCatalogo(e) {
             
             // Recarregar modelos do backend
             const modRes = await fetch('/api/modelos').then(r => r.json()).catch(() => ({ modelos: [] }));
-            AppState.modelos = modRes.modelos || [];
+            AppState.modelos = ordenarListaModelos(garantirModelosPadraoNoFrontend(modRes.modelos || []));
 
             renderModelos();
             atualizarSelectsModelos(nome);
@@ -2948,7 +3822,7 @@ async function excluirModelo(id) {
         if (res.ok && data.success) {
             // Recarregar modelos do backend
             const modRes = await fetch('/api/modelos').then(r => r.json()).catch(() => ({ modelos: [] }));
-            AppState.modelos = modRes.modelos || [];
+            AppState.modelos = ordenarListaModelos(garantirModelosPadraoNoFrontend(modRes.modelos || []));
 
             renderModelos();
             atualizarSelectsModelos();
@@ -2970,7 +3844,8 @@ function atualizarSelectsModelos(valorPreferencial = null) {
         { id: 'crm-modelo', placeholder: '-- Selecione o Modelo do Catálogo --' }
     ];
 
-    const modelos = AppState.modelos || [];
+    const modelos = ordenarListaModelos(garantirModelosPadraoNoFrontend(AppState.modelos || []));
+    AppState.modelos = modelos;
     
     // Organizar por categoria/tipo
     const ordemCategorias = ['iPhone', 'MacBook', 'iPad', 'Apple Watch', 'Acessório', 'Outros'];
@@ -3997,6 +4872,181 @@ function renderConsolidado() {
                             <div class="bg-emerald-500 h-full rounded-full" style="width: ${pct}%"></div>
                         </div>
                     </div>
+                `;
+            }).join('');
+        }
+    }
+
+    // 8.5. Ranking de Fornecedores & Volume de Negociação no Período (Consolidado & PDF)
+    const fornCatalogoMap = new Map();
+    (AppState.fornecedoresCatalogo || []).forEach(fc => {
+        if (fc && fc.nome) {
+            fornCatalogoMap.set(String(fc.nome).toLowerCase().trim(), fc);
+        }
+    });
+
+    const statsFornConsolidado = new Map();
+    let totalInvestidoFornecedores = 0;
+    let totalUnidadesFornecedores = 0;
+
+    entradasPeriodo.forEach(d => {
+        const fornBruto = extrairFornecedorDispositivo(d);
+        const nomeForn = fornBruto || 'Sem Fornecedor Informado';
+        const chave = nomeForn.toLowerCase().trim();
+        const isTradeIn = nomeForn === 'Upgrade / Trade-In Cliente' || (d.origem && String(d.origem).includes('Trade-In')) || Boolean(d.cliente_origem_id);
+        const isFornecedorNominado = !isTradeIn && nomeForn !== 'Sem Fornecedor Informado';
+
+        const catInfo = fornCatalogoMap.get(chave) || {};
+        if (!statsFornConsolidado.has(chave)) {
+            statsFornConsolidado.set(chave, {
+                nome: nomeForn,
+                cidade: catInfo.cidade_origem || (isTradeIn ? 'Troca de Cliente (PDV)' : ''),
+                whatsapp: catInfo.telefone_whatsapp || '',
+                isTradeIn,
+                isFornecedorNominado,
+                qtdTotal: 0,
+                qtdEstoque: 0,
+                qtdVendidos: 0,
+                custoTotal: 0,
+                lucroEsperado: 0
+            });
+        }
+
+        const itemF = statsFornConsolidado.get(chave);
+        const custo = (parseFloat(d.custo_compra) || 0) + (parseFloat(d.custos_adicionais) || 0);
+        const preco = parseFloat(d.preco_sugerido) || 0;
+        const lucro = preco - custo;
+
+        itemF.qtdTotal += 1;
+        if (d.status === 'Vendido') {
+            itemF.qtdVendidos += 1;
+        } else {
+            itemF.qtdEstoque += 1;
+        }
+        itemF.custoTotal += custo;
+        itemF.lucroEsperado += lucro;
+
+        if (!isTradeIn) {
+            totalInvestidoFornecedores += custo;
+            totalUnidadesFornecedores += 1;
+        }
+    });
+
+    const rankingConsolidadoForn = Array.from(statsFornConsolidado.values()).sort((a, b) => {
+        // Prioriza fornecedores reais acima de "Sem Fornecedor" / "Trade-In" em caso de empate
+        if (b.custoTotal !== a.custoTotal) return b.custoTotal - a.custoTotal;
+        if (b.qtdTotal !== a.qtdTotal) return b.qtdTotal - a.qtdTotal;
+        return a.nome.localeCompare(b.nome, 'pt-BR');
+    });
+
+    // Filtra fornecedores comerciais (priorizando os nominados; se não houver nominados, usa os não-Trade-In)
+    const apenasFornecedoresNominados = rankingConsolidadoForn.filter(f => f.isFornecedorNominado && f.qtdTotal > 0);
+    const baseDestaquesForn = apenasFornecedoresNominados.length > 0
+        ? apenasFornecedoresNominados
+        : rankingConsolidadoForn.filter(f => !f.isTradeIn && f.qtdTotal > 0);
+
+    // 1) Fornecedor Mais Comprado em Quantidade
+    const fornMaisQtd = [...baseDestaquesForn].sort((a, b) => {
+        if (b.qtdTotal !== a.qtdTotal) return b.qtdTotal - a.qtdTotal;
+        return b.custoTotal - a.custoTotal;
+    })[0] || null;
+
+    // 2) Maior Volume Financeiro (R$)
+    const fornMaiorVolume = [...baseDestaquesForn].sort((a, b) => {
+        if (b.custoTotal !== a.custoTotal) return b.custoTotal - a.custoTotal;
+        return b.qtdTotal - a.qtdTotal;
+    })[0] || null;
+
+    // 3) Menor Volume Financeiro (R$)
+    const fornMenorVolume = [...baseDestaquesForn].sort((a, b) => {
+        if (a.custoTotal !== b.custoTotal) return a.custoTotal - b.custoTotal;
+        return a.qtdTotal - b.qtdTotal;
+    })[0] || null;
+
+    const elConsFornBadge = document.getElementById('cons-forn-badge-resumo');
+    if (elConsFornBadge) {
+        const qtdParceiros = baseDestaquesForn.length;
+        elConsFornBadge.innerText = `${qtdParceiros} fornecedor${qtdParceiros !== 1 ? 'es' : ''} ativo${qtdParceiros !== 1 ? 's' : ''} no período`;
+    }
+
+    const elConsTotalComp = document.getElementById('cons-forn-total-comprado');
+    if (elConsTotalComp) elConsTotalComp.innerText = formatMoeda(totalInvestidoFornecedores);
+
+    const elConsTotalUn = document.getElementById('cons-forn-total-unidades');
+    if (elConsTotalUn) {
+        elConsTotalUn.innerText = `${totalUnidadesFornecedores} aparelho${totalUnidadesFornecedores !== 1 ? 's' : ''} de fornecedor${tradeInQtd > 0 ? ` (+${tradeInQtd} upgrade)` : ''}`;
+    }
+
+    const elMaisNome = document.getElementById('cons-forn-mais-comprado-nome');
+    const elMaisQtd = document.getElementById('cons-forn-mais-comprado-qtd');
+    if (elMaisNome && elMaisQtd) {
+        if (fornMaisQtd) {
+            elMaisNome.innerText = fornMaisQtd.nome;
+            elMaisQtd.innerText = `${fornMaisQtd.qtdTotal} un. (${formatMoeda(fornMaisQtd.custoTotal)})`;
+        } else {
+            elMaisNome.innerText = '--';
+            elMaisQtd.innerText = 'Nenhuma compra no período';
+        }
+    }
+
+    const elMaiorNome = document.getElementById('cons-forn-maior-volume-nome');
+    const elMaiorVal = document.getElementById('cons-forn-maior-volume-valor');
+    if (elMaiorNome && elMaiorVal) {
+        if (fornMaiorVolume) {
+            const shareMaior = totalInvestidoEntradas > 0 ? ((fornMaiorVolume.custoTotal / totalInvestidoEntradas) * 100).toFixed(1) : '0.0';
+            elMaiorNome.innerText = fornMaiorVolume.nome;
+            elMaiorVal.innerText = `${formatMoeda(fornMaiorVolume.custoTotal)} (${shareMaior}% do total)`;
+        } else {
+            elMaiorNome.innerText = '--';
+            elMaiorVal.innerText = 'R$ 0,00 (0%)';
+        }
+    }
+
+    const elMenorNome = document.getElementById('cons-forn-menor-volume-nome');
+    const elMenorVal = document.getElementById('cons-forn-menor-volume-valor');
+    if (elMenorNome && elMenorVal) {
+        if (fornMenorVolume) {
+            elMenorNome.innerText = fornMenorVolume.nome;
+            elMenorVal.innerText = `${formatMoeda(fornMenorVolume.custoTotal)} (${fornMenorVolume.qtdTotal} un.)`;
+        } else {
+            elMenorNome.innerText = '--';
+            elMenorVal.innerText = 'R$ 0,00 (0 un.)';
+        }
+    }
+
+    const tbodyConsForn = document.getElementById('tabela-consolidado-fornecedores-corpo');
+    if (tbodyConsForn) {
+        if (rankingConsolidadoForn.length === 0) {
+            tbodyConsForn.innerHTML = `
+                <tr>
+                    <td colspan="8" class="p-6 text-center text-slate-400 italic">
+                        Nenhuma entrada de fornecedor registrada no período selecionado.
+                    </td>
+                </tr>
+            `;
+        } else {
+            tbodyConsForn.innerHTML = rankingConsolidadoForn.map((f, idx) => {
+                const custoMed = f.qtdTotal > 0 ? (f.custoTotal / f.qtdTotal) : 0;
+                const partPct = totalInvestidoEntradas > 0 ? ((f.custoTotal / totalInvestidoEntradas) * 100).toFixed(1) : '0.0';
+                return `
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        <td class="py-2.5 px-3 font-mono font-black text-slate-700">${idx + 1}º</td>
+                        <td class="py-2.5 px-3">
+                            <span class="font-bold text-slate-900 block">${f.nome}</span>
+                            ${f.cidade ? `<span class="text-[10px] text-slate-400 block">${f.cidade}</span>` : ''}
+                        </td>
+                        <td class="py-2.5 px-3 text-center">
+                            <span class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-mono font-bold text-[11px]">${f.qtdTotal} un.</span>
+                        </td>
+                        <td class="py-2.5 px-3 text-center whitespace-nowrap">
+                            <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">${f.qtdEstoque} est.</span>
+                            <span class="text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded ml-1">${f.qtdVendidos} vend.</span>
+                        </td>
+                        <td class="py-2.5 px-3 text-right font-mono font-black text-slate-900 whitespace-nowrap">${formatMoeda(f.custoTotal)}</td>
+                        <td class="py-2.5 px-3 text-right font-mono font-semibold text-slate-600 whitespace-nowrap">${partPct}%</td>
+                        <td class="py-2.5 px-3 text-right font-mono text-slate-500 whitespace-nowrap">${formatMoeda(custoMed)}</td>
+                        <td class="py-2.5 px-3 text-right font-mono font-black text-emerald-600 whitespace-nowrap">+${formatMoeda(f.lucroEsperado)}</td>
+                    </tr>
                 `;
             }).join('');
         }

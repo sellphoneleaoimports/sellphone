@@ -97,11 +97,6 @@
                     <span id="badge-matches" class="ml-auto text-[8px] px-1 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold hidden shrink-0">MATCH</span>
                 </a>
 
-                <a href="javascript:void(0)" onclick="switchTab('posvenda')" id="nav-posvenda" class="sidebar-link">
-                    <i class="fa-solid fa-shield-halved text-xs w-4 text-center shrink-0"></i>
-                    <span>Pós-Venda & Ciclo</span>
-                </a>
-
                 <a href="javascript:void(0)" onclick="switchTab('documentos')" id="nav-documentos" class="sidebar-link">
                     <i class="fa-solid fa-receipt text-xs w-4 text-center shrink-0"></i>
                     <span>Recibos & Termos</span>
@@ -113,15 +108,26 @@
                     <span id="badge-total-modelos" class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-slate-300 font-mono shrink-0">0</span>
                 </a>
 
-                <a href="javascript:void(0)" onclick="switchTab('consolidado')" id="nav-consolidado" class="sidebar-link">
-                    <i class="fa-solid fa-chart-pie text-xs w-4 text-center shrink-0"></i>
-                    <span>Consolidado</span>
-                    <span class="ml-auto text-[8px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold shrink-0">PDF</span>
+                <a href="javascript:void(0)" onclick="switchTab('fornecedores')" id="nav-fornecedores" class="sidebar-link">
+                    <i class="fa-solid fa-truck-field text-xs w-4 text-center shrink-0"></i>
+                    <span>Fornecedores</span>
+                    <span id="badge-total-fornecedores" class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-slate-300 font-mono shrink-0">0</span>
                 </a>
 
                 <a href="javascript:void(0)" onclick="switchTab('rotas')" id="nav-rotas" class="sidebar-link">
                     <i class="fa-solid fa-route text-xs w-4 text-center shrink-0"></i>
                     <span>Rotas & Entregas</span>
+                </a>
+
+                <a href="javascript:void(0)" onclick="switchTab('posvenda')" id="nav-posvenda" class="sidebar-link">
+                    <i class="fa-solid fa-shield-halved text-xs w-4 text-center shrink-0"></i>
+                    <span>Pós-Venda & Ciclo</span>
+                </a>
+
+                <a href="javascript:void(0)" onclick="switchTab('consolidado')" id="nav-consolidado" class="sidebar-link">
+                    <i class="fa-solid fa-chart-pie text-xs w-4 text-center shrink-0"></i>
+                    <span>Consolidado</span>
+                    <span class="ml-auto text-[8px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold shrink-0">PDF</span>
                 </a>
             </div>
 
@@ -209,16 +215,20 @@
                         <button onclick="switchTab('tradein'); toggleMobileMenu();" class="w-full text-left py-2 px-3 rounded-xl hover:bg-white/10">PDV & Trade-In</button>
                         <button onclick="switchTab('crm'); toggleMobileMenu();" class="w-full text-left py-2 px-3 rounded-xl hover:bg-white/10">CRM & Clientes</button>
                         <button onclick="switchTab('encomendas'); toggleMobileMenu();" class="w-full text-left py-2 px-3 rounded-xl hover:bg-white/10">Lista de Espera</button>
-                        <button onclick="switchTab('posvenda'); toggleMobileMenu();" class="w-full text-left py-2 px-3 rounded-xl hover:bg-white/10">Pós-Venda</button>
                         <button onclick="switchTab('documentos'); toggleMobileMenu();" class="w-full text-left py-2 px-3 rounded-xl hover:bg-white/10">Recibos & Termos</button>
                         <button onclick="switchTab('modelos'); toggleMobileMenu();" class="w-full text-left py-2 px-3 rounded-xl hover:bg-white/10">Catálogo de Produtos</button>
-                        <button onclick="switchTab('consolidado'); toggleMobileMenu();" class="w-full text-left py-2 px-3 rounded-xl hover:bg-white/10 flex items-center justify-between">
-                            <span>Consolidado</span>
-                            <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">PDF</span>
+                        <button onclick="switchTab('fornecedores'); toggleMobileMenu();" class="w-full text-left py-2 px-3 rounded-xl hover:bg-white/10 flex items-center justify-between">
+                            <span>Fornecedores & Compras</span>
+                            <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold">RELATÓRIO</span>
                         </button>
                         <button onclick="switchTab('rotas'); toggleMobileMenu();" class="w-full text-left py-2 px-3 rounded-xl hover:bg-white/10 flex items-center justify-between">
                             <span>Rotas & Entregas</span>
                             <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-bold">ROTA</span>
+                        </button>
+                        <button onclick="switchTab('posvenda'); toggleMobileMenu();" class="w-full text-left py-2 px-3 rounded-xl hover:bg-white/10">Pós-Venda & Ciclo</button>
+                        <button onclick="switchTab('consolidado'); toggleMobileMenu();" class="w-full text-left py-2 px-3 rounded-xl hover:bg-white/10 flex items-center justify-between">
+                            <span>Consolidado</span>
+                            <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">PDF</span>
                         </button>
                     </div>
                 </div>
@@ -280,7 +290,7 @@
                         </div>
                     </div>
 
-                    <!-- Card 2: Capital Empatado -->
+                    <!-- Card 2: Capital Investido -->
                     <div class="bento-card p-6 flex flex-col justify-between">
                         <div class="flex items-center justify-between mb-4">
                             <div class="w-10 h-10 rounded-2xl bg-slate-100 text-slate-800 flex items-center justify-center font-bold text-sm">
@@ -289,16 +299,16 @@
                             <span class="text-[11px] font-semibold text-slate-500 px-2 py-0.5 bg-slate-100 rounded-full">Investido</span>
                         </div>
                         <div>
-                            <span class="text-xs font-medium text-slate-500">Capital Empatado</span>
+                            <span class="text-xs font-medium text-slate-500">Capital Investido</span>
                             <h3 id="dash-capital-empatado" class="text-2xl font-black text-slate-900 mt-1 font-mono">R$ 0,00</h3>
                         </div>
                         <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                            <span class="text-slate-500">Lucro Bruto Projetado:</span>
+                            <span class="text-slate-500">Lucro Líquido Esperado:</span>
                             <span id="dash-lucro-projetado" class="font-bold text-emerald-600 font-mono">+R$ 0,00</span>
                         </div>
                     </div>
 
-                    <!-- Card 3: Trade-Ins Realizados -->
+                    <!-- Card 3: Upgrades Realizados -->
                     <div class="bento-card p-6 flex flex-col justify-between">
                         <div class="flex items-center justify-between mb-4">
                             <div class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-sm">
@@ -307,7 +317,7 @@
                             <span id="dash-periodo-tradein-label" class="text-[11px] font-bold text-amber-700 px-2 py-0.5 bg-amber-100/70 rounded-full">Este Mês</span>
                         </div>
                         <div>
-                            <span class="text-xs font-medium text-slate-500">Trade-Ins Realizados</span>
+                            <span class="text-xs font-medium text-slate-500">Upgrades Realizados</span>
                             <div class="flex items-baseline gap-2 mt-1">
                                 <h3 id="dash-total-tradein" class="text-2xl font-black text-slate-900 font-mono">0</h3>
                                 <span class="text-xs text-slate-500">trocas aceitas</span>
@@ -319,7 +329,7 @@
                         </div>
                     </div>
 
-                    <!-- Card 4: Faturamento Realizado -->
+                    <!-- Card 4: Faturamento Bruto -->
                     <div class="bento-card p-6 flex flex-col justify-between">
                         <div class="flex items-center justify-between mb-4">
                             <div class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm">
@@ -328,14 +338,14 @@
                             <span id="dash-periodo-vendas-label" class="text-[11px] font-bold text-emerald-700 px-2 py-0.5 bg-emerald-100/70 rounded-full">Este Mês</span>
                         </div>
                         <div>
-                            <span class="text-xs font-medium text-slate-500">Faturamento Realizado</span>
+                            <span class="text-xs font-medium text-slate-500">Faturamento Bruto</span>
                             <div class="flex items-baseline gap-2 mt-1">
                                 <h3 id="dash-faturamento-total" class="text-2xl font-black text-slate-900 font-mono">R$ 0,00</h3>
                                 <span id="dash-qtd-vendas-periodo" class="text-xs text-slate-500 font-medium">0 vendas</span>
                             </div>
                         </div>
                         <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                            <span class="text-slate-500">Lucro Bruto Caixa:</span>
+                            <span class="text-slate-500">Lucro Líquido Esperado:</span>
                             <span id="dash-lucro-total" class="font-bold text-emerald-600 font-mono">+R$ 0,00</span>
                         </div>
                     </div>
@@ -873,6 +883,260 @@
             </section>
 
             <!-- ==============================================================================
+                 VIEW 8.5: FORNECEDORES & RELATÓRIOS DE COMPRAS POR FORNECEDOR
+                 ============================================================================== -->
+            <section id="view-fornecedores" class="space-y-6 hidden">
+                <!-- Barra Superior de Filtros, Cadastro e Impressão PDF -->
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5 bg-white rounded-3xl border border-slate-100 shadow-sm print:hidden">
+                    <div>
+                        <h3 class="font-black text-base text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-truck-field text-blue-600"></i> Central de Fornecedores & Relatórios de Compras
+                        </h3>
+                        <p class="text-xs text-slate-500">Cadastre seus fornecedores para seleção no estoque e audite o volume de compras, estoque e lucro por parceiro.</p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- Filtro de Período -->
+                        <div class="flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-2xl text-xs font-bold" id="fornecedores-filtros-periodo">
+                            <button type="button" onclick="setFornecedorPeriodo('todos')" id="btn-forn-periodo-todos" class="pill-tab active">Tudo</button>
+                            <button type="button" onclick="setFornecedorPeriodo('mes_atual')" id="btn-forn-periodo-mes_atual" class="pill-tab inactive">Este Mês</button>
+                            <button type="button" onclick="setFornecedorPeriodo('mes_passado')" id="btn-forn-periodo-mes_passado" class="pill-tab inactive">Mês Passado</button>
+                            <button type="button" onclick="setFornecedorPeriodo('ultimos_30')" id="btn-forn-periodo-ultimos_30" class="pill-tab inactive">Últimos 30 Dias</button>
+                            <button type="button" onclick="setFornecedorPeriodo('ano')" id="btn-forn-periodo-ano" class="pill-tab inactive">Este Ano</button>
+                        </div>
+
+                        <!-- Botão Exportar Relatório PDF -->
+                        <button type="button" onclick="imprimirRelatorioFornecedoresPDF()" class="btn-pill-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 font-bold text-slate-700">
+                            <i class="fa-solid fa-file-pdf text-rose-500"></i>
+                            <span>Relatório PDF</span>
+                        </button>
+
+                        <!-- Botão Novo Fornecedor -->
+                        <button type="button" onclick="openModalNovoFornecedor()" class="btn-pill-primary text-xs py-2 px-4 flex items-center gap-1.5 font-bold">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Cadastrar Fornecedor</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4 Cards Executivos (Métricas de Compras por Fornecedor) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bento-card p-5 flex flex-col justify-between">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Fornecedores Cadastrados</span>
+                            <div class="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                                <i class="fa-solid fa-truck-field text-sm"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <h2 id="forn-card-total-fornecedores" class="text-2xl font-extrabold font-mono text-slate-900">0</h2>
+                            <p id="forn-card-fornecedores-ativos" class="text-[11px] text-slate-400 mt-1">Com histórico de compras</p>
+                        </div>
+                    </div>
+
+                    <div class="bento-card p-5 flex flex-col justify-between">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Aparelhos Comprados</span>
+                            <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                <i class="fa-solid fa-mobile-screen-button text-sm"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <h2 id="forn-card-total-aparelhos" class="text-2xl font-extrabold font-mono text-slate-900">0</h2>
+                            <p id="forn-card-estoque-ativo" class="text-[11px] text-emerald-600 font-semibold mt-1">0 em estoque • 0 vendidos</p>
+                        </div>
+                    </div>
+
+                    <div class="bento-card p-5 flex flex-col justify-between">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Capital Investido (Compras)</span>
+                            <div class="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                                <i class="fa-solid fa-sack-dollar text-sm"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <h2 id="forn-card-capital-investido" class="text-2xl font-extrabold font-mono text-slate-900">R$ 0,00</h2>
+                            <p id="forn-card-ticket-medio" class="text-[11px] text-slate-400 mt-1">Custo médio: R$ 0,00 / un.</p>
+                        </div>
+                    </div>
+
+                    <div class="bento-card p-5 flex flex-col justify-between">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Lucro Líquido Esperado</span>
+                            <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                                <i class="fa-solid fa-chart-line text-sm"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <h2 id="forn-card-lucro-esperado" class="text-2xl font-extrabold font-mono text-emerald-600">R$ 0,00</h2>
+                            <p id="forn-card-margem-media" class="text-[11px] text-slate-400 mt-1">Margem projetada sobre compras</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabela 1: Ranking e Catálogo de Fornecedores -->
+                <div class="bento-card p-6 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-ranking-star text-amber-500"></i> Ranking de Fornecedores & Volume de Negociação
+                            </h3>
+                            <p class="text-[11px] text-slate-400">Clique em "Ver Aparelhos" em qualquer fornecedor para filtrar o relatório detalhado abaixo.</p>
+                        </div>
+                        <div class="relative w-full sm:w-72 print:hidden">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                            <input type="text" id="filtro-busca-fornecedores" oninput="handleBuscaFornecedores(this.value)" placeholder="Buscar fornecedor, cidade ou WhatsApp..."
+                                   class="w-full bg-slate-50 border border-slate-200 rounded-full pl-9 pr-4 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-slate-300 transition-all">
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-slate-600">
+                            <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] font-bold tracking-wider">
+                                <tr>
+                                    <th class="px-4 py-3 rounded-l-xl">Fornecedor / Parceiro</th>
+                                    <th class="px-4 py-3">Contato / Cidade</th>
+                                    <th class="px-4 py-3 text-center">Aparelhos Comprados</th>
+                                    <th class="px-4 py-3 text-center">Em Estoque / Vendidos</th>
+                                    <th class="px-4 py-3 text-right">Volume de Compra (R$)</th>
+                                    <th class="px-4 py-3 text-right">Custo Médio</th>
+                                    <th class="px-4 py-3 text-right">Lucro Líquido Esperado</th>
+                                    <th class="px-4 py-3 rounded-r-xl text-right print:hidden">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-fornecedores-corpo" class="divide-y divide-slate-100">
+                                <!-- Preenchido via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tabela 2: Relatório Analítico de Aparelhos por Fornecedor -->
+                <div class="bento-card p-6 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+                        <div>
+                            <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-list-check text-blue-600"></i> Relatório Analítico de Aparelhos por Fornecedor
+                            </h3>
+                            <p id="subtitulo-relatorio-fornecedor-itens" class="text-[11px] text-slate-400">Listando todos os aparelhos vinculados aos fornecedores no período selecionado.</p>
+                        </div>
+
+                        <div class="flex items-center gap-2 print:hidden">
+                            <label class="text-[11px] font-bold text-slate-500">Filtrar Fornecedor:</label>
+                            <select id="filtro-fornecedor-relatorio" onchange="selecionarFornecedorRelatorio(this.value)"
+                                    class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none">
+                                <option value="Todos">Todos os Fornecedores</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-slate-600">
+                            <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] font-bold tracking-wider">
+                                <tr>
+                                    <th class="px-3.5 py-3 rounded-l-xl">Data Entrada</th>
+                                    <th class="px-3.5 py-3">Fornecedor</th>
+                                    <th class="px-3.5 py-3">Aparelho / Capacidade / Cor</th>
+                                    <th class="px-3.5 py-3">IMEI / Nº de Série</th>
+                                    <th class="px-3.5 py-3 text-right">Custo Total</th>
+                                    <th class="px-3.5 py-3 text-right">Venda / Sugerido</th>
+                                    <th class="px-3.5 py-3 text-right">Lucro Esperado</th>
+                                    <th class="px-3.5 py-3 rounded-r-xl text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-relatorio-fornecedor-itens" class="divide-y divide-slate-100">
+                                <!-- Preenchido via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- MODAL: CADASTRAR / EDITAR FORNECEDOR -->
+            <div id="modal-cadastro-fornecedor" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden ios-modal-backdrop">
+                <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl p-6 space-y-5 ios-modal-sheet max-h-[90vh] overflow-y-auto">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-9 h-9 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-sm font-bold">
+                                <i class="fa-solid fa-truck-field"></i>
+                            </div>
+                            <div>
+                                <h3 id="modal-fornecedor-titulo" class="font-bold text-base text-slate-900">Cadastrar Novo Fornecedor</h3>
+                                <p class="text-[11px] text-slate-400">Gravado na tabela <span class="font-mono font-bold text-slate-600">fornecedores</span> para seleção e relatórios</p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="closeModal('modal-cadastro-fornecedor')" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <form id="form-cadastro-fornecedor" onsubmit="salvarFornecedorCatalogo(event)" class="space-y-3.5 text-xs">
+                        <input type="hidden" id="forn-edit-id" value="">
+                        <input type="hidden" id="forn-select-target" value="">
+
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Nome do Fornecedor / Empresa *</label>
+                            <input type="text" id="forn-nome" required placeholder="Ex: Miami Imports, Distribuidora SP, João Atacado..."
+                                   class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-slate-400">
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-bold text-slate-700 mb-1">WhatsApp / Telefone</label>
+                                <input type="text" id="forn-whatsapp" placeholder="(81) 99999-9999"
+                                       class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 focus:bg-white focus:outline-none focus:border-slate-400">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-slate-700 mb-1">Cidade / Origem</label>
+                                <input type="text" id="forn-cidade" placeholder="Ex: Recife - PE / EUA / SP"
+                                       class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:outline-none focus:border-slate-400">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-bold text-slate-700 mb-1">CNPJ / CPF</label>
+                                <input type="text" id="forn-cnpj-cpf" placeholder="00.000.000/0001-00"
+                                       class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 focus:bg-white focus:outline-none focus:border-slate-400">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-slate-700 mb-1">Prazo de Garantia com o Fornecedor</label>
+                                <input type="text" id="forn-garantia-padrao" placeholder="Ex: 30 dias / 90 dias / Troca imediata"
+                                       class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:outline-none focus:border-slate-400">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-bold text-slate-700 mb-1">Chave PIX / Dados Bancários</label>
+                                <input type="text" id="forn-chave-pix" placeholder="PIX / Conta para pagamento"
+                                       class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:outline-none focus:border-slate-400">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-slate-700 mb-1">E-mail / Contato Secundário</label>
+                                <input type="text" id="forn-email" placeholder="contato@fornecedor.com"
+                                       class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:outline-none focus:border-slate-400">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Observações / Condições de Negociação</label>
+                            <textarea id="forn-observacoes" rows="2" placeholder="Ex: Envia via transportadora, aceita devolução em 15 dias..."
+                                      class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:outline-none focus:border-slate-400"></textarea>
+                        </div>
+
+                        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                            <button type="button" onclick="closeModal('modal-cadastro-fornecedor')" class="btn-pill-secondary">Cancelar</button>
+                            <button type="submit" class="btn-pill-primary">
+                                <i class="fa-solid fa-check"></i>
+                                <span>Salvar Fornecedor</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ==============================================================================
                  VIEW 9: RELATÓRIO CONSOLIDADO & FECHAMENTO (COM EXPORTAÇÃO PDF)
                  ============================================================================== -->
             <section id="view-consolidado" class="space-y-6 hidden">
@@ -1117,6 +1381,75 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- SEÇÃO: RANKING DE FORNECEDORES & VOLUME DE NEGOCIAÇÃO NO PERÍODO (SAI NO PDF) -->
+                    <div class="bento-card p-6 space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                            <div>
+                                <h4 class="font-black text-sm text-slate-900 flex items-center gap-2">
+                                    <i class="fa-solid fa-truck-field text-blue-600"></i> Ranking de Fornecedores & Volume de Negociação no Período
+                                </h4>
+                                <p class="text-xs text-slate-400">Auditoria de compras por fornecedor, maior/menor volume investido e participação nas entradas do período.</p>
+                            </div>
+                            <span id="cons-forn-badge-resumo" class="text-[11px] font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-full font-mono">
+                                0 fornecedores no período
+                            </span>
+                        </div>
+
+                        <!-- 4 Indicadores de Destaque de Compras por Fornecedor -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                                <span class="text-[10px] font-bold uppercase text-slate-400 block">Total Comprado (Fornecedores)</span>
+                                <span id="cons-forn-total-comprado" class="font-mono font-black text-base text-slate-900 block">R$ 0,00</span>
+                                <span id="cons-forn-total-unidades" class="text-[11px] text-blue-600 font-bold block">0 aparelhos comprados</span>
+                            </div>
+
+                            <div class="p-3.5 bg-amber-50/50 rounded-2xl border border-amber-200/60 space-y-1">
+                                <span class="text-[10px] font-bold uppercase text-amber-700 block">
+                                    <i class="fa-solid fa-trophy mr-1 text-amber-500"></i>Fornecedor Mais Comprado (Qtd)
+                                </span>
+                                <span id="cons-forn-mais-comprado-nome" class="font-black text-sm text-slate-900 truncate block">--</span>
+                                <span id="cons-forn-mais-comprado-qtd" class="text-[11px] text-amber-800 font-mono font-bold block">0 unidades</span>
+                            </div>
+
+                            <div class="p-3.5 bg-emerald-50/40 rounded-2xl border border-emerald-200/60 space-y-1">
+                                <span class="text-[10px] font-bold uppercase text-emerald-700 block">
+                                    <i class="fa-solid fa-arrow-trend-up mr-1 text-emerald-600"></i>Maior Volume de Compra (R$)
+                                </span>
+                                <span id="cons-forn-maior-volume-nome" class="font-black text-sm text-slate-900 truncate block">--</span>
+                                <span id="cons-forn-maior-volume-valor" class="text-[11px] text-emerald-700 font-mono font-bold block">R$ 0,00 (0%)</span>
+                            </div>
+
+                            <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                                <span class="text-[10px] font-bold uppercase text-slate-400 block">
+                                    <i class="fa-solid fa-arrow-trend-down mr-1 text-slate-400"></i>Menor Volume de Compra (R$)
+                                </span>
+                                <span id="cons-forn-menor-volume-nome" class="font-black text-sm text-slate-900 truncate block">--</span>
+                                <span id="cons-forn-menor-volume-valor" class="text-[11px] text-slate-500 font-mono font-bold block">R$ 0,00 (0 un.)</span>
+                            </div>
+                        </div>
+
+                        <!-- Tabela de Ranking de Fornecedores no Consolidado -->
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead>
+                                    <tr class="border-b border-slate-100 text-[10px] uppercase tracking-wider text-slate-400">
+                                        <th class="py-2.5 px-3">Pos.</th>
+                                        <th class="py-2.5 px-3">Fornecedor / Parceiro</th>
+                                        <th class="py-2.5 px-3 text-center">Qtd. Comprada</th>
+                                        <th class="py-2.5 px-3 text-center">Status Atual (Est. / Vend.)</th>
+                                        <th class="py-2.5 px-3 text-right">Volume Negociado (R$)</th>
+                                        <th class="py-2.5 px-3 text-right">Participação (%)</th>
+                                        <th class="py-2.5 px-3 text-right">Custo Médio</th>
+                                        <th class="py-2.5 px-3 text-right font-bold text-emerald-700">Lucro Líq. Esperado</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabela-consolidado-fornecedores-corpo" class="divide-y divide-slate-100">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
@@ -1401,7 +1734,7 @@
 
     <!-- MODAL: CADASTRO DE APARELHO -->
     <div id="modal-cadastro-aparelho" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden overflow-y-auto ios-modal-backdrop">
-        <div class="bg-white rounded-3xl w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl p-6 lg:p-8 space-y-5 ios-modal-sheet">
+        <div class="bg-white rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl p-6 lg:p-8 space-y-5 ios-modal-sheet">
             <div class="flex items-center justify-between pb-4 border-b border-slate-100">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-2xl bg-slate-100 text-slate-800 flex items-center justify-center font-bold">
@@ -1483,25 +1816,31 @@
 
                 <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
                     <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
-                        <div class="sm:col-span-3">
-                            <label class="block text-xs font-bold text-slate-700 mb-1">Identificador</label>
-                            <select id="cad-identificador-tipo" onchange="aoDigitarIMEICadastro(document.getElementById('cad-identificador-valor').value)" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none">
-                                <option value="IMEI">IMEI (iPhone/iPad)</option>
-                                <option value="Serial">Número de Série (Serial)</option>
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Tipo ID</label>
+                            <select id="cad-identificador-tipo" onchange="aoDigitarIMEICadastro(document.getElementById('cad-identificador-valor').value)" class="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-semibold text-slate-800 focus:outline-none">
+                                <option value="IMEI">IMEI</option>
+                                <option value="Serial">Serial</option>
                             </select>
                         </div>
-                        <div class="sm:col-span-6">
+                        <div class="sm:col-span-4">
                             <div class="flex items-center justify-between mb-1">
-                                <label class="block text-xs font-bold text-slate-700">Código do IMEI ou Serial</label>
+                                <label class="block text-xs font-bold text-slate-700">Código do IMEI</label>
                                 <span id="cad-imei-contador" class="text-[10px] font-mono font-bold text-slate-400">0/15 dígitos</span>
                             </div>
-                            <div class="flex items-center gap-1.5">
-                                <input type="text" id="cad-identificador-valor" required oninput="aoDigitarIMEICadastro(this.value)" placeholder="Ex: 352984110293841 (*#06#)" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-slate-800">
-                                <button type="button" onclick="verificarIMEICadastro()" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shrink-0 flex items-center gap-1.5 shadow-xs transition-all" title="Validar autenticidade GSMA, checar histórico na loja e identificar TAC">
+                            <div class="flex items-center gap-1">
+                                <input type="text" id="cad-identificador-valor" required oninput="aoDigitarIMEICadastro(this.value)" placeholder="Ex: 352984110293841" class="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-slate-800">
+                                <button type="button" onclick="verificarIMEICadastro()" class="px-2.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shrink-0 flex items-center gap-1 shadow-xs transition-all" title="Validar autenticidade GSMA, checar histórico na loja e identificar TAC">
                                     <i class="fa-solid fa-magnifying-glass-chart text-yellow-400"></i>
-                                    <span>Consultar</span>
                                 </button>
                             </div>
+                        </div>
+                        <div class="sm:col-span-3">
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-bold text-slate-700">Número de Série</label>
+                                <span class="text-[9px] font-mono font-semibold text-blue-600">Apple</span>
+                            </div>
+                            <input type="text" id="cad-numero-serie" oninput="this.value = this.value.toUpperCase()" placeholder="Ex: F2L9X8K1Q0" class="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-mono font-bold text-slate-900 uppercase focus:outline-none focus:border-slate-800">
                         </div>
                         <div class="sm:col-span-3">
                             <label class="block text-xs font-bold text-slate-700 mb-1">Situação Anatel / iCloud</label>
@@ -1513,17 +1852,17 @@
                         </div>
                     </div>
 
-                    <!-- Barra de Atalhos Oficiais (Copia o IMEI e abre Pop-up Lateral) -->
+                    <!-- Barra de Atalhos Oficiais (Copia o IMEI / Número de Série e abre Pop-up Lateral) -->
                     <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/80">
                         <span class="text-[11px] text-slate-500 font-medium">
-                            <i class="fa-solid fa-shield-halved text-slate-400 mr-1"></i>Consulta oficial (copia o IMEI automaticamente p/ colar):
+                            <i class="fa-solid fa-shield-halved text-slate-400 mr-1"></i>Consulta oficial (copia automaticamente p/ colar):
                         </span>
                         <div class="flex flex-wrap items-center gap-1.5">
                             <button type="button" onclick="abrirConsultaAnatelPopup('cad-identificador-valor', 'cad-imei-status')" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-bold flex items-center gap-1 transition-colors" title="Copia o IMEI automaticamente e abre a janela oficial Celular Legal da Anatel">
                                 <i class="fa-solid fa-tower-cell text-emerald-600"></i>
                                 <span>1. Consultar Anatel (Pop-up)</span>
                             </button>
-                            <button type="button" onclick="abrirConsultaApplePopup('cad-identificador-valor')" class="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 text-[11px] font-bold flex items-center gap-1 transition-colors" title="Copia o IMEI/Serial e abre a consulta oficial de Cobertura e Garantia da Apple">
+                            <button type="button" onclick="abrirConsultaApplePopup('cad-numero-serie', 'cad-identificador-valor')" class="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 text-[11px] font-bold flex items-center gap-1 transition-colors" title="Copia o Número de Série (ou IMEI) e abre a consulta oficial de Cobertura e Garantia da Apple">
                                 <i class="fa-brands fa-apple text-blue-600"></i>
                                 <span>2. Garantia Apple (Pop-up)</span>
                             </button>
@@ -1532,6 +1871,21 @@
 
                     <!-- Painel Dinâmico de Resultado da Consulta do IMEI -->
                     <div id="painel-status-imei-cadastro" class="hidden rounded-xl p-3 text-xs space-y-1.5 border"></div>
+                </div>
+
+                <!-- Fornecedor (Dropdown para Controle de Volume de Compras e Negociação) -->
+                <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="block text-xs font-bold text-slate-700">
+                            <i class="fa-solid fa-truck-field mr-1 text-slate-500"></i> Fornecedor de Entrada
+                        </label>
+                        <button type="button" onclick="cadastrarNovoFornecedorRapido()" class="text-[11px] font-bold text-amber-600 hover:text-amber-700">
+                            <i class="fa-solid fa-plus-circle mr-0.5"></i> Cadastrar Fornecedor
+                        </button>
+                    </div>
+                    <select id="cad-fornecedor" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none">
+                        <option value="">-- Selecione o Fornecedor --</option>
+                    </select>
                 </div>
 
                 <!-- Bateria com Slider Dinâmico -->
@@ -1709,10 +2063,41 @@
                                         <option value="">-- Selecione o Modelo do Catálogo --</option>
                                     </select>
                                 </div>
+
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                    <div>
+                                        <label class="block text-[10px] font-bold text-slate-700 mb-1">Capacidade</label>
+                                        <select id="ti-capacidade" class="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-semibold text-slate-800">
+                                            <option value="64GB">64GB</option>
+                                            <option value="128GB" selected>128GB</option>
+                                            <option value="256GB">256GB</option>
+                                            <option value="512GB">512GB</option>
+                                            <option value="1TB">1TB</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] font-bold text-slate-700 mb-1">Cor</label>
+                                        <input type="text" id="ti-cor" placeholder="Ex: Preto" class="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-medium text-slate-800">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] font-bold text-slate-700 mb-1">Bateria (%)</label>
+                                        <input type="number" id="ti-bateria" min="50" max="100" value="88" class="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold text-slate-800">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] font-bold text-slate-700 mb-1">Grau Estético</label>
+                                        <select id="ti-grau" class="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-semibold text-slate-800">
+                                            <option value="Grau A+ (Impecável)">Grau A+</option>
+                                            <option value="Grau A (Excelente)" selected>Grau A</option>
+                                            <option value="Grau B (Leves marcas)">Grau B</option>
+                                            <option value="Grau C (Sinais visíveis)">Grau C</option>
+                                        </select>
+                                    </div>
+                                </div>
+
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     <div>
                                         <div class="flex items-center justify-between mb-1">
-                                            <label class="block text-[11px] font-bold text-slate-700">IMEI ou Serial na Troca</label>
+                                            <label class="block text-[11px] font-bold text-slate-700">IMEI na Troca</label>
                                             <span id="ti-imei-contador" class="text-[9px] font-mono font-bold text-slate-400">0/15</span>
                                         </div>
                                         <div class="flex items-center gap-1">
@@ -1723,17 +2108,37 @@
                                         </div>
                                     </div>
                                     <div>
-                                        <label class="block text-[11px] font-bold text-yellow-800 mb-1">Valor Avaliação (R$)</label>
-                                        <input type="number" step="0.01" id="ti-valor-avaliado" value="0.00" oninput="calcularCheckoutVenda()" class="w-full bg-white border border-yellow-400 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-slate-900">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label class="block text-[11px] font-bold text-slate-700">Número de Série</label>
+                                            <span class="text-[9px] font-mono font-semibold text-blue-600">Apple</span>
+                                        </div>
+                                        <input type="text" id="ti-numero-serie" oninput="this.value = this.value.toUpperCase()" placeholder="Ex: F2L9X8K1Q0" class="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold uppercase">
                                     </div>
                                 </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="block text-[11px] font-bold text-yellow-800 mb-1">Valor Avaliação / Entrada (R$)</label>
+                                        <input type="number" step="0.01" id="ti-valor-avaliado" value="0.00" oninput="aoDigitarValorTradeIn(this.value)" class="w-full bg-white border border-yellow-400 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-slate-900">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-bold text-emerald-700 mb-1">Preço Sugerido Revenda (R$)</label>
+                                        <input type="number" step="0.01" id="ti-preco-revenda" placeholder="Ex: 3490.00" class="w-full bg-white border border-emerald-300 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-emerald-700">
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-700 mb-1">Observações do Aparelho Recebido</label>
+                                    <input type="text" id="ti-notas" placeholder="Ex: Sem detalhes, acompanha caixa..." class="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-800">
+                                </div>
+
                                 <div class="flex flex-wrap items-center justify-between gap-1.5 pt-1">
                                     <div class="flex items-center gap-1">
                                         <button type="button" onclick="abrirConsultaAnatelPopup('ti-identificador', 'ti-imei-status')" class="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-bold flex items-center gap-1">
                                             <i class="fa-solid fa-tower-cell"></i>
                                             <span>Anatel (Pop-up)</span>
                                         </button>
-                                        <button type="button" onclick="abrirConsultaApplePopup('ti-identificador')" class="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 text-[10px] font-bold flex items-center gap-1">
+                                        <button type="button" onclick="abrirConsultaApplePopup('ti-numero-serie', 'ti-identificador')" class="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 text-[10px] font-bold flex items-center gap-1">
                                             <i class="fa-brands fa-apple"></i>
                                             <span>Apple</span>
                                         </button>
@@ -1754,11 +2159,11 @@
                                 <input type="number" step="0.01" id="venda-desconto" value="0.00" oninput="calcularCheckoutVenda()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-slate-700 mb-1">Garantia Loja</label>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Garantia</label>
                                 <select id="venda-garantia-meses" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold">
-                                    <option value="3" selected>90 Dias Balcão</option>
-                                    <option value="6">6 Meses</option>
-                                    <option value="12">1 Ano</option>
+                                    <option value="3" selected>90 dias / 3 meses</option>
+                                    <option value="4">4 meses</option>
+                                    <option value="apple">Garantia Apple</option>
                                 </select>
                             </div>
                         </div>
@@ -1793,7 +2198,7 @@
 
                             <div class="p-3 bg-white rounded-2xl border border-slate-200 space-y-1 text-xs text-slate-500">
                                 <div class="flex justify-between">
-                                    <span>Lucro Bruto Caixa:</span>
+                                    <span>Lucro Líquido Esperado:</span>
                                     <span id="resumo-lucro-bruto" class="font-bold text-emerald-600 font-mono">+ R$ 0,00</span>
                                 </div>
                                 <div class="flex justify-between">
